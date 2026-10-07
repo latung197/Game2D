@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/node_modules/
+client/dist/
+*.tsbuildinfo
+.env
+.runtime-test/
+.runtime-dev/
+**/.keys/
+phase1-*.png
+*.user
