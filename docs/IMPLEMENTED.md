@@ -1,105 +1,47 @@
-# Kiểm kê phần đã triển khai ở Phase 1
+# Kiểm kê code hiện tại
 
-Tài liệu này mô tả **code đang tồn tại**, không mô tả tính năng mong muốn. Dùng cùng [HANDOFF.md](HANDOFF.md) khi mở repo trong phiên khác.
+Tài liệu này mô tả tính năng đã triển khai, không phải toàn bộ yêu cầu sản phẩm. Kế hoạch nằm trong [PHASES.md](PHASES.md).
 
-## 1. Cấu trúc thực tế
+## Backend
 
-```text
-Game.sln
-src/
-  Game.Api/
-    Program.cs
-    Authentication/JwtTokenIssuer.cs
-    appsettings.json
-    appsettings.Development.json
-    Dockerfile
-    Properties/launchSettings.json
-  Game.Application/Accounts/AuthService.cs
-  Game.Infrastructure/Persistence/
-    GameDbContext.cs
-    EfAccountRepository.cs
-    Migrations/InitialAuth.cs
-    Migrations/GameDbContextModelSnapshot.cs
-  Game.Domain/             # project khung
-  Game.Realtime/           # project khung
-  Game.Server/             # project khung
-  Game.Shared/             # project khung
-client/
-  index.html
-  package.json
-  package-lock.json
-  tsconfig.json
-  vite.config.ts
-  .prettierrc.json
-  src/
-    main.tsx
-    style.css
-    ui/App.tsx
-    services/api/auth.ts
-    game/PhaserGame.tsx
-    game/config/map.ts
-    game/scenes/GameScene.ts
-compose.yaml
-.env.example
-.gitignore
-README.md
-docs/
-```
-
-Các project `Game.Domain`, `Game.Realtime`, `Game.Server`, `Game.Shared` có `.csproj` và project reference cần thiết, **chưa có class gameplay**. `Game.Api` hiện là host duy nhất; chưa có process game server riêng. `Game.sln` là solution tiêu chuẩn theo yêu cầu.
-
-## 2. Luồng backend hiện tại
-
-### Khởi động
-
-`Game.Api/Program.cs` đọc `ConnectionStrings:Game` và `Jwt:Key`; dừng sớm nếu thiếu hoặc key ngắn hơn 32 byte UTF-8. Nó đăng ký `GameDbContext` dùng Npgsql, `EfAccountRepository`, `AuthService` và `JwtTokenIssuer`. Sau khi build host, API gọi `Database.MigrateAsync()` **trước khi mở cổng**. Log được đưa ra console. Key ring Data Protection lưu trong `.keys` ở local hoặc đường dẫn cấu hình. Middleware gồm CORS, authentication, authorization và rate limiter.
-
-`appsettings.Development.json` là cấu hình local mẫu: `scrap_street`, role `scrap`, cổng 5432 và JWT key development. Environment variable dạng `ConnectionStrings__Game`, `Jwt__Key` ghi đè giá trị mẫu. `launchSettings.json` của template có profile Development; lệnh trong [SETUP.md](SETUP.md) chọn URL 5080. `Dockerfile` publish `Game.Api`, `compose.yaml` dựng PostgreSQL 16, Redis 7 và API. Redis chưa được DI hoặc sử dụng bởi code.
-
-### Đăng ký
-
-`POST /api/auth/register` nhận JSON `{ "username": "...", "password": "..." }`. Endpoint từ chối trường trống. `AuthService` trim và lowercase username; chỉ nhận 3–24 ký tự ASCII gồm chữ, số, `_`; password 12–128 ký tự. Service kiểm tra username tồn tại, băm mật khẩu bằng ASP.NET Core `PasswordHasher<Account>`, lưu `Account`. Repository còn bắt lỗi unique index từ PostgreSQL để xử lý race giữa hai request. Thành công trả `playerId`, `username`, `accessToken`. Username trùng trả 409, input không hợp lệ trả 400.
-
-### Đăng nhập và xác thực
-
-`POST /api/auth/login` trim/lowercase username rồi verify hash. Mật khẩu sai hoặc user không tồn tại trả 401. JWT chứa `sub` là GUID của account và tên user, hết hạn sau 30 phút; issuer/audience/key lấy từ config. `GET /api/me` yêu cầu bearer JWT, lấy user ID từ claim đã xác thực rồi đọc DB, trả `playerId` và `username`. Identity của người chơi **không lấy từ body request**. Hai endpoint auth được rate limit 10 request/phút/IP theo code hiện tại.
-
-### PostgreSQL
-
-Migration `202610080001_InitialAuth` tạo bảng vật lý `users`, các cột `Id` UUID, `Username` VARCHAR(24), `PasswordHash` TEXT, `CreatedAt` TIMESTAMPTZ và unique index `IX_users_Username`. EF model nằm trong `GameDbContext`, snapshot ở `GameDbContextModelSnapshot`. Không có bảng room/match/profile/refresh token. Tài khoản demo ở máy gốc là dữ liệu phát sinh khi test, không phải seed migration.
-
-## 3. Luồng frontend hiện tại
-
-`index.html` mount React qua `src/main.tsx`. `App.tsx` hiển thị landing page, form login/register, trạng thái tài khoản và nút **Lái thử offline**. `services/api/auth.ts` dùng `fetch` đến `/api/auth/login` hoặc `/api/auth/register`; Vite proxy những đường dẫn này sang API cổng 5080. Nếu API chưa chạy, trang vẫn mở được và hiện thông báo khi auth thất bại.
-
-Frontend giữ `{playerId, username, accessToken}` trong `sessionStorage` sau auth; reload trong cùng browser session khôi phục thông tin đó. Nút Đăng xuất xóa session client. Hiện **không gọi `/api/me` để tái xác thực khi reload**, không có refresh token và không kiểm tra token hết hạn trước khi hiển thị tên; cần hoàn thiện khi làm session lifecycle.
-
-`App.tsx` lazy load `PhaserGame.tsx` chỉ khi có account session hoặc bấm lái thử. Có thể vào thẳng màn xem bằng query `?preview=1`; đây là đường tắt của Phase 1, không phải quyền truy cập trận online. `PhaserGame.tsx` tạo Phaser Game trong React effect và destroy khi rời màn, dùng Scale.RESIZE. Gameplay loop nằm trong `GameScene.update`, không nằm trong React.
-
-`config/map.ts` định nghĩa map 2400×1600 và sáu hình nhà. `GameScene.ts` vẽ nền, đường, vỉa hè, nhà và cây bằng Graphics/Text; tạo xe placeholder với logo ngôi sao. WASD/phím mũi tên tính vector di chuyển, chuẩn hóa đường chéo, tốc độ 280 world units/giây; `delta` được clamp 50 ms. Xe bị clamp vào biên map và bị chặn khi đi vào bounding rectangle của nhà có margin 28. Chuột đổi hướng turret. Camera theo xe với lerp 0,09. Không có tilemap, physics engine, bắn, projectile, damage hoặc multiplayer trong scene này.
-
-`src/style.css` định hình landing/game theo phố pastel, viền đậm và màu ấm. CSS art ở landing và map Graphics là hình tự tạo cho placeholder, không dùng asset từ ảnh tham khảo. `client/.prettierrc.json` và script `format`/`format:check` giữ TSX/CSS dễ đọc.
-
-## 4. Lệnh build và kiểm thử đã thực hiện
-
-| Kiểm tra | Kết quả đã ghi nhận |
+| Vị trí | Đã triển khai |
 |---|---|
-| `dotnet build Game.sln --no-restore` | Thành công, 0 warning, 0 error |
-| `cd client && npm run build` | Thành công; Vite cảnh báo chunk Phaser lớn, đã lazy load scene |
-| `cd client && npm run format:check` | Thành công |
-| PostgreSQL tạm + API | Migration tạo bảng, register/login/`/api/me` thành công |
-| Auth lỗi | Username trùng 409; mật khẩu sai 401 |
-| PostgreSQL sẵn có trên máy gốc | API khởi động/migrate thành công trên DB riêng `scrap_street` |
-| Frontend/API live | Frontend HTTP 200; `/health` trả `ok` |
-| Browser screenshot | Landing và game scene render; đã sửa chiều cao canvas để xe ở trong viewport |
+| `Game.Api/Program.cs` | Host ASP.NET Core, JWT, CORS, rate limit auth, migration khi khởi động, `/health`, `/api/auth/register`, `/api/auth/login`, `/api/me`, `/hubs/game` |
+| `Game.Application/Accounts/AuthService.cs` | Chuẩn hóa username, kiểm tra input, hash/verify password, phát JWT |
+| `Game.Infrastructure/Persistence/*` | EF Core/Npgsql, bảng `users`, unique username, migration `InitialAuth` |
+| `Game.Shared/Contracts/*` | Protocol version 3, byte codec little-endian, input 10 byte, snapshot `11 + 9 × số xe` byte, tia bắn 15 byte, radar response 6 byte |
+| `Game.Application/Abstractions/IMatchCommandGateway.cs` | Interface Hub → server và server → publisher |
+| `Game.Realtime/Hubs/*` | Hub yêu cầu JWT, lấy player ID từ claims; publisher gửi snapshot và tia bắn qua SignalR group |
+| `Game.Realtime/Connections/ConnectionRegistry.cs` | Theo dõi connection ID và player ID; bỏ player khi connection cuối rời đi |
+| `Game.Server/Matches/*` | Development match cố định, player runtime, command queue 1024, tick 30 Hz, snapshot khoảng 10 Hz |
 
-Chưa có test project tự động. Kiểm tra browser bằng ảnh chụp xác nhận render tĩnh, **không chứng minh đầy đủ hành vi điều khiển dưới mọi thiết bị**. Docker Compose chưa được chạy trên máy gốc. Khi bổ sung Phase 2, viết test cho simulation/input và chạy thử hai trình duyệt thật.
+`Game.Domain` vẫn là project khung. `Game.Api` là host duy nhất; chưa có process game server riêng. Redis nằm trong Compose nhưng chưa được code sử dụng. Database chỉ lưu tài khoản; state trận ở memory.
 
-## 5. Các điểm nối để phát triển tiếp
+### Auth
 
-1. Thêm contract trong `Game.Shared` và Hub trong `Game.Realtime`; đừng gọi SignalR trực tiếp từ `GameScene`.
-2. Thêm `MatchManager`/`MatchRuntime`/fixed loop trong `Game.Server`, rồi route Hub command qua interface Application.
-3. Thay movement offline bằng state authoritative khi vào match online. Có thể giữ màn lái thử offline riêng để phát triển UI/map.
-4. Chuyển collision/map definition sang dữ liệu server hiểu được; Phaser chỉ là renderer.
-5. Tạo migration riêng cho mỗi nhóm persistent data mới; không ghi tick state vào PostgreSQL.
-6. Cập nhật tài liệu này sau mỗi phase, nhất là khi contract/protocol hoặc luồng chạy thay đổi.
+`register` nhận username 3–24 ký tự ASCII (chữ/số/gạch dưới) và password 12–128 ký tự, lowercase username, dùng `PasswordHasher<Account>`, trả `playerId`, `username`, `accessToken`. Username trùng trả 409. `login` sai trả 401. JWT hết hạn sau 30 phút, chứa account GUID trong `sub`. `/api/me` yêu cầu bearer token. Hai endpoint auth được rate limit 10 request/phút/IP. `sessionStorage` giữ token phía client, logout chỉ xóa token; chưa có refresh token hoặc server revocation.
+
+### Realtime
+
+Client kết nối `/hubs/game` bằng SignalR MessagePack với JWT rồi gọi `JoinMatch`. Hub lấy GUID người chơi từ claim đã xác thực, không dùng ID trong payload. Runtime tối đa 10 player; join thành công mới vào SignalR group. Input gửi dưới dạng 10 byte gồm version, sequence, trục di chuyển, góc ngắm và flags dự phòng. Gói sai version/độ dài/trục, hoặc sequence cũ/trùng bị bỏ. Server chuẩn hóa đường chéo, di chuyển tối đa 280 world units/giây, chặn biên map và bounding box nhà. Server không nhận tọa độ hay damage từ client. Xem [PROTOCOL.md](PROTOCOL.md).
+
+`MatchManager` đọc tối đa 1024 command mỗi tick, gọi `MatchRuntime.Step()` mỗi 1/30 giây. Snapshot riêng cho từng người được xếp vào queue chỉ giữ bản mới nhất mỗi 3 tick; worker riêng mã hóa byte rồi gửi SignalR, không chờ network trong tick. Lệnh Fire giới hạn 7 tick, server tính tia va vào nhà/xe/rìa map và gửi sự kiện binary qua queue riêng. Mỗi lần trúng trừ 25/100 HP; xe chết ngừng di chuyển/bắn và hồi sinh sau 3 giây. Lệnh radar được server giới hạn 6 giây hiệu lực, 30 giây hồi. GUID/username gửi qua roster lúc join và event khi player vào/rời trận; snapshot chỉ dùng network ID 2 byte. Chưa có projectile vật lý, ammo, item nhặt trên map, zone, room lifecycle hay nhiều match đang hoạt động.
+
+## Client
+
+`client/src/ui/App.tsx` có landing, đăng ký/đăng nhập và lái thử offline. Sau đăng nhập, `PhaserGame` tạo `GameNetworkAdapter`, kết nối SignalR, tự join/rejoin. `ClientWorldState` giữ snapshot mới nhất. `GameScene` gửi input khoảng 20 lần/giây, render vị trí self/remote từ snapshot, dọn xe remote khi rời trận. Chưa có prediction/reconciliation/interpolation nên chuyển động online có thể giật.
+
+Map Phaser Graphics 3200×2200 có mười nhà, đường và bụi cây; dữ liệu nhà ở `client/src/game/config/map.ts`. Offline dùng WASD/phím mũi tên, chuột xoay turret, camera follow và collision đơn giản. Online dùng cùng map/điều khiển, nhưng vị trí do server quyết định. HUD có HP, minimap, radar mở bản đồ lớn theo xác nhận của server, hai cần ảo và nút bắn trên màn hình cảm ứng. Server chỉ gửi xe trong bán kính 850 units; xe đang nấp bụi chỉ hiện khi lại gần 145 units, trừ khi radar đang bật. Chưa có tilemap hay physics engine.
+
+## Kiểm thử đã thực hiện
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `dotnet build Game.sln --no-restore` | Thành công, 0 warning/0 error |
+| `cd client; npm run build` | Thành công; Vite cảnh báo chunk Phaser lớn và annotation trong SignalR package |
+| `cd client; npm run format:check` | Thành công; Prettier dùng `endOfLine: auto` để chấp nhận LF/CRLF theo file trên Windows |
+| `npm run test:realtime` | Hai account thấy nhau qua byte codec; bắn trúng 25 HP/phát, giới hạn nhịp bắn, chết/hồi sinh, stealth/radar server, input sai, reconnect; snapshot hai xe 29 byte, tia bắn 15 byte, khoảng 10 snapshot/giây |
+| `npm run test:browser` | Hai tab Edge headless render Phaser; payload WebSocket chứa snapshot hai xe đo được 47 byte; viewport điện thoại dọc/ngang và điều khiển chạm hoạt động |
+| API không có player | Working set 87.6 → 87.5 MB, private memory 44.6 → 44.5 MB trong 5 giây quan sát; không thấy tăng liên tục trong mẫu ngắn này |
+
+Kiểm thử dùng PostgreSQL tạm cổng 55432 vì mật khẩu role `scrap` của PostgreSQL đang chạy tại cổng 5432 không khớp cấu hình mẫu. Không dùng Docker; Compose chưa được smoke test. Browser test mới dùng giả lập kích thước/chạm của Edge, chưa thử Safari iOS hay thiết bị thật. Chưa có test riêng cho rule simulation với độ trễ hoặc tải lớn.

@@ -58,7 +58,7 @@ export function App(): React.JSX.Element {
         </div>
         <div className="topbar-center">
           <span className="status-light" /> XƯỞNG XE HỖN LOẠN{' '}
-          <span className="version">/ PHASE 01</span>
+          <span className="version">/ PHASE 02</span>
         </div>
         <div className="topbar-right">
           {session ? (
@@ -76,46 +76,23 @@ export function App(): React.JSX.Element {
 
       {playing ? (
         <main className="play-layout">
-          <aside className="play-sidebar">
-            <div className="eyebrow">BẢN ĐỒ 01 · KHU PHỐ PHẾ LIỆU</div>
-            <h1>Chạy thử chiếc xe đầu tiên.</h1>
-            <p>Luồn qua những con phố nhỏ, ghé tiệm bắp xào và tìm góc đường yêu thích.</p>
-            <div className="instruction">
-              <span>W A S D</span>
-              <div>Di chuyển</div>
+          <div className="play-intro">
+            <div>
+              <span className="eyebrow">ĐẤU TRƯỜNG / 01</span>
+              <h1>Khu phố phế liệu</h1>
             </div>
-            <div className="instruction">
-              <span>↑ ← ↓ →</span>
-              <div>Di chuyển</div>
-            </div>
-            <div className="instruction">
-              <span>CHUỘT</span>
-              <div>Ngắm hướng súng</div>
-            </div>
-            <div className="phase-note">
-              Phase 1 là chuyển động offline. Bắn và multiplayer sẽ được thêm ở các phase tiếp theo.
-            </div>
+            <p>Bản đồ rộng · ẩn nấp trong bụi · radar quét vị trí</p>
             <button
-              className="outline-button"
+              className="leave-button"
               onClick={() => (preview ? setPreview(false) : signOut())}
             >
               ← Về xưởng
             </button>
-          </aside>
-          <section className="game-frame">
-            <div className="game-toolbar">
-              <span>
-                <i /> KHU PHỐ PHẾ LIỆU
-              </span>
-              <span>CHẾ ĐỘ LÁI THỬ</span>
-            </div>
+          </div>
+          <section className="game-frame" aria-label="Đấu trường Scrap Street">
             <Suspense fallback={<div className="game-loading">ĐANG KHỞI ĐỘNG XE...</div>}>
-              <PhaserGame />
+              <PhaserGame session={session} />
             </Suspense>
-            <div className="game-footer">
-              <span>◆ MAP RỘNG HƠN MÀN HÌNH</span>
-              <span>CAMERA THEO XE · VA CHẠM NHÀ</span>
-            </div>
           </section>
         </main>
       ) : (
@@ -233,7 +210,7 @@ export function App(): React.JSX.Element {
       )}
       <footer className="site-footer">
         <span>SCRAP STREET © 2026</span>
-        <span>ĐANG LẮP RÁP · PHASE 01</span>
+        <span>ĐANG LẮP RÁP · PHASE 02</span>
       </footer>
     </div>
   );

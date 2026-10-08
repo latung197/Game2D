@@ -1,6 +1,6 @@
 # Lộ trình phát triển Phase 1–10
 
-**Ngày cập nhật:** 2026-10-08. **Trạng thái thực tế:** Phase 1 hoàn thành; Phase 2–10 là kế hoạch. Không suy ra một tính năng đã có chỉ vì project/thư mục khung đã tồn tại.
+**Ngày cập nhật:** 2026-10-08. **Trạng thái thực tế:** Phase 1–2 đã triển khai; Phase 3–10 là kế hoạch. Chi tiết code và giới hạn Phase 2 ở [IMPLEMENTED.md](IMPLEMENTED.md).
 
 Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room tối đa 10 người, 100 HP, Pistol, Health Kit, một safe zone, create/join room, damage/death/winner. Chỉ sau mốc này mới mở rộng troll item, interest management và cosmetics. Mỗi phase cần cập nhật tài liệu, chỉ rõ file tạo/sửa, lệnh chạy, test và kết quả quan sát được.
 
@@ -29,9 +29,9 @@ Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room t�
 
 **Đã kiểm tra:** `dotnet build Game.sln` không lỗi/cảnh báo; `npm run build` và `npm run format:check` thành công. Trên PostgreSQL thử nghiệm đã chạy migration, register/login/`/api/me`; username trùng trả 409, mật khẩu sai trả 401. Trên máy gốc đã chạy API với PostgreSQL 16 có sẵn, tạo database game riêng, frontend trả HTTP 200 và `/health` trả `ok`. Màn lái thử được kiểm tra bằng screenshot. Vite báo chunk Phaser lớn nhưng Phaser đã lazy load khi vào màn game.
 
-**Giới hạn:** movement/aim/collision chỉ chạy ở client; map Graphics chưa phải tilemap; không có room, bắn, HP, projectile, loot, zone hay realtime. `Game.Domain`, `Game.Server`, `Game.Realtime`, `Game.Shared` chưa có gameplay code. Auth chưa có refresh token/logout server. Docker Compose chưa được chạy thực tế trên máy gốc vì không có Docker CLI.
+**Giới hạn khi kết thúc Phase 1:** movement/aim/collision chỉ chạy ở client; map Graphics chưa phải tilemap; không có room, bắn, HP, projectile, loot, zone hay realtime. Phase 2 đã thêm movement server và realtime. Auth vẫn chưa có refresh token/logout server. Docker Compose chưa được chạy thực tế trên máy gốc vì không có Docker CLI.
 
-## Phase 2 — realtime, hai người thấy nhau — CHƯA LÀM
+## Phase 2 — realtime, hai người thấy nhau — ĐÃ LÀM
 
 **Điều kiện đầu vào:** Phase 1 build được, API và PostgreSQL chạy. Tạo một development match cố định nhưng **đã dùng `MatchManager`/`MatchRuntime`**, để Phase 4 chỉ thêm lifecycle room.
 

@@ -4,6 +4,10 @@ using System.Threading.RateLimiting;
 using Game.Api.Authentication;
 using Game.Application.Accounts;
 using Game.Infrastructure.Persistence;
+using Game.Application.Abstractions;
+using Game.Realtime.Connections;
+using Game.Realtime.Hubs;
+using Game.Server.Matches;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -28,8 +32,28 @@ builder.Services.AddDbContext<GameDbContext>(options => options.UseNpgsql(connec
 builder.Services.AddScoped<IAccountRepository, EfAccountRepository>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddSingleton<IAccessTokenIssuer, JwtTokenIssuer>();
+builder.Services.AddSignalR(options =>
+{
+    options.MaximumReceiveMessageSize = 4096;
+    options.SupportedProtocols = ["messagepack"];
+}).AddMessagePackProtocol();
+builder.Services.AddSingleton<ConnectionRegistry>();
+builder.Services.AddSingleton<IGameEventPublisher, SignalRGameEventPublisher>();
+builder.Services.AddSingleton<MatchManager>();
+builder.Services.AddSingleton<IMatchCommandGateway>(sp => sp.GetRequiredService<MatchManager>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MatchManager>());
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            if (context.Request.Path.StartsWithSegments("/hubs/game") &&
+                context.Request.Query.TryGetValue("access_token", out var token))
+                context.Token = token;
+            return Task.CompletedTask;
+        }
+    };
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -70,6 +94,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapHub<GameHub>("/hubs/game");
 app.MapPost("/api/auth/register", async (Credentials input, AuthService auth, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(input.Username) || string.IsNullOrEmpty(input.Password))

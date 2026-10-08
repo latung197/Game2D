@@ -1,6 +1,6 @@
 # Kiến trúc Scrap Street
 
-**Trạng thái:** Phase 1 đã có API auth và game lái thử offline. Những thành phần realtime/game server mô tả dưới đây là **thiết kế dự kiến** để triển khai ở Phase 2–10; chưa được phép coi là code đang chạy.
+**Trạng thái:** Phase 2 đã có development match realtime qua SignalR, server tick 30 Hz và snapshot khoảng 10 Hz. Những phần combat, room và prediction ở Phase 3–10 vẫn là thiết kế dự kiến. Xem [IMPLEMENTED.md](IMPLEMENTED.md) để phân biệt code hiện có với kế hoạch.
 
 ## 1. Mục tiêu và giới hạn bản đầu
 
@@ -21,15 +21,15 @@ Game.Shared: DTO/enum/network contract dùng tại các ranh giới phù hợp
 
 | Project | Vai trò hiện tại | Vai trò ở các phase tiếp theo |
 |---|---|---|
-| `Game.Api` | Host ASP.NET Core, REST auth, DI, JWT, CORS, rate limit, migration lúc khởi động | Room/profile/leaderboard endpoint; host Hub và runtime |
+| `Game.Api` | Host ASP.NET Core, REST auth, SignalR Hub, DI, JWT, CORS, rate limit auth, migration lúc khởi động | Room/profile/leaderboard endpoint |
 | `Game.Application` | `AuthService`, account repository/token interfaces | Use case room/match/profile; command gateway và publisher interfaces |
 | `Game.Domain` | Project thuần C# chưa có model gameplay | Definition và rule không phụ thuộc EF/SignalR |
 | `Game.Infrastructure` | EF Core/Npgsql, user entity, repository, migration | PostgreSQL records, Redis room directory/presence, repositories |
-| `Game.Realtime` | Project khung | Hub chỉ xác thực/routing, connection map, snapshot publisher |
-| `Game.Server` | Project khung | MatchManager, MatchRuntime, fixed loop và các gameplay system |
-| `Game.Shared` | Project khung | DTO, protocol version, network enums |
+| `Game.Realtime` | Hub xác thực/routing, connection registry, snapshot publisher | Room group và các event gameplay |
+| `Game.Server` | MatchManager, một MatchRuntime development, tick 30 Hz, movement cơ bản | Nhiều room và gameplay system |
+| `Game.Shared` | DTO và protocol version 1 | Mở rộng contract theo gameplay |
 
-`Game.Api` là composition root. Không đặt simulation trong Controller/Hub, không dùng EF entity làm player runtime. Để tránh vòng phụ thuộc, interface `IMatchCommandGateway` và `IGameEventPublisher` sẽ nằm trong `Game.Application` hoặc một assembly contract nhỏ; `Game.Server` và `Game.Realtime` triển khai hai phía.
+`Game.Api` là composition root. Không đặt simulation trong Controller/Hub, không dùng EF entity làm player runtime. Interface `IMatchCommandGateway` và `IGameEventPublisher` nằm trong `Game.Application`; `Game.Server` và `Game.Realtime` triển khai hai phía.
 
 ## 3. Những gì Phase 1 thật sự làm
 
@@ -40,9 +40,11 @@ Game.Shared: DTO/enum/network contract dùng tại các ranh giới phù hợp
 - `client/src/ui/App.tsx`: form đăng ký/đăng nhập, lưu access token trong `sessionStorage`, có nút vào lái thử offline. `auth.ts` gọi REST qua Vite proxy.
 - `client/src/game/scenes/GameScene.ts`: vẽ map placeholder bằng Phaser Graphics, nhận WASD/arrow, aim theo chuột, kiểm tra va chạm với các nhà, camera theo xe. **Toàn bộ movement này là client offline**.
 
-Phase 1 chưa có Hub, room, gameplay server, projectile, damage, zone, loot, Redis integration, refresh token, server logout hay thống kê. Chỉ có bảng `users` được tạo; các bảng còn lại ở mục 10 là kế hoạch.
+Đây là phần mô tả **lịch sử Phase 1**. Phase 2 đã thêm Hub và movement server; room lifecycle, projectile, damage, zone, loot, Redis integration, refresh token, server logout và thống kê vẫn chưa có. Chỉ có bảng `users` được tạo; các bảng còn lại ở mục 10 là kế hoạch.
 
 ## 4. MatchRuntime dự kiến
+
+Phase 2 đã triển khai một `MatchRuntime` development với player movement, command queue và tick 30 Hz. Mô hình nhiều room, các gameplay system và xử lý lỗi từng match dưới đây vẫn là kế hoạch.
 
 Mỗi room đang chơi có đúng một `MatchRuntime`, sở hữu `World`, `Players`, `Projectiles`, `Items`, `Zone`, `SpatialGrid`, command queue và tick counter. Một nơi duy nhất sửa state của match: fixed simulation loop. Hub nhận command đã xác thực, kiểm tra sơ bộ kích thước/tần suất rồi xếp vào queue có giới hạn. Các system xử lý command ở tick kế tiếp.
 
@@ -50,22 +52,17 @@ Thứ tự tick đề xuất: lấy input hợp lệ → status/movement/collisi
 
 `MatchManager` quản lý dictionary room → runtime, tạo/dừng riêng từng runtime. Lỗi của một match được ghi log kèm `MatchId`/`ServerTick`, match đó được kết thúc có kiểm soát; không dùng một global mutable GameLoop cho tất cả room.
 
-## 5. Protocol realtime dự kiến
+## 5. Protocol realtime hiện tại và dự kiến
 
-REST: auth, create/list/join/leave room, profile, leaderboard. SignalR: kết nối đã có JWT, `JoinMatch`, `LeaveMatch`, `InputBatch`, `PickupRequest`; server gửi `JoinAccepted`, `Snapshot`, `GameEvent`, `CommandRejected`. Đây là hợp đồng dự kiến, **chưa có endpoint/hub trong Phase 1**.
+Hiện có REST auth và SignalR MessagePack `/hubs/game`: `JoinMatch`, `InputBatch` 10 byte, `Snapshot` binary `11 + 9 × số xe` byte; `JoinMatch` trả roster/`JoinAccepted`. `PlayerJoined`/`PlayerLeft` cập nhật metadata. Chi tiết little-endian, lượng tử hóa tọa độ/góc và version ở [PROTOCOL.md](PROTOCOL.md). Các REST room/profile/leaderboard và lệnh `LeaveMatch`, `PickupRequest`, `CommandRejected` là hợp đồng dự kiến, chưa triển khai. `GameEvent` đã có contract/publisher nhưng chưa phát từ gameplay.
 
 ```text
-InputBatch {
-  protocolVersion, sequence, clientTick,
-  moveX, moveY, aimAngle, fire, useItem
-}
-Snapshot {
-  protocolVersion, serverTick, lastProcessedSequence,
-  selfState, nearbyPlayers, projectiles, items, zone
-}
+InputBatch dự kiến: sequence, clientTick, moveX/Y, aimAngle, fire, useItem
+Snapshot dự kiến: serverTick, lastProcessedSequence, selfState,
+  nearbyPlayers, projectiles, items, zone
 ```
 
-Client không được gửi position, damage, HP hoặc player ID làm nguồn sự thật. Server lấy identity từ authenticated connection. `sequence` giúp bỏ input cũ/trùng và reconciliation; `serverTick` giúp interpolation. Version field cho phép đổi serializer về binary trong tương lai mà giữ semantic contract. SignalR Hub chỉ route; `Game.Server` xử lý luật.
+Client không được gửi position, damage, HP hoặc player ID làm nguồn sự thật. Server lấy identity từ authenticated connection. `sequence` giúp bỏ input cũ/trùng và chuẩn bị reconciliation; `serverTick` giúp interpolation về sau. Protocol binary v3 có version field để nâng cấp record khi thêm đạn/bom/bẫy; hai count dành chỗ trong header hiện luôn bằng 0. Snapshot lọc theo người xem để không phát tọa độ xe nấp bụi khi radar tắt. SignalR Hub chỉ route; `Game.Server` xử lý luật.
 
 ## 6. Movement và render dự kiến
 
@@ -73,7 +70,7 @@ Local player: lấy input → dự đoán movement ngay → lưu pending input `
 
 Remote player: giữ buffer 2+ snapshot và render trễ khoảng 100 ms theo `serverTick`, nội suy vị trí/góc. Thiếu snapshot thì extrapolate ngắn, sau đó giữ vị trí. Spawn, death và teleport là event rời rạc, không nội suy xuyên qua.
 
-`RealtimeClient` chỉ biết protocol, `GameNetworkAdapter` chuyển message thành `ClientWorldState`, Phaser scene render world state. Khi Phase 3 thay movement offline, tránh để scene tự quyết định vị trí cuối cùng trong match online.
+Phase 2 đã có `RealtimeClient`, `GameNetworkAdapter` và `ClientWorldState`; Phaser scene render world state trong match online. Phase 3 sẽ thêm prediction/reconciliation và interpolation.
 
 ## 7. Weapon, damage, item, status
 
@@ -109,7 +106,7 @@ Một match có một game server owner. Khi cần nhiều máy, Redis lưu `roo
 
 ## 11. Bảo mật, quan sát, hiệu năng
 
-Hiện có password hash, unique username, JWT xác thực `/api/me`, rate limit auth theo IP và cấu hình key ngoài code cho Compose. Phase tiếp theo cần refresh rotation/revocation, SignalR JWT theo Hub path, kiểm tra room membership, input sequence/rate, fire rate, ammo, cooldown, pickup distance, message size và bounded queue. Khi browser SignalR truyền token qua query string WebSocket, không log query token.
+Hiện có password hash, unique username, JWT xác thực `/api/me` và SignalR Hub, rate limit auth theo IP, giới hạn Hub message size 4096 byte, kiểm tra input sequence/axis và bounded queue. Phase tiếp theo cần refresh rotation/revocation, kiểm tra room membership, giới hạn input rate, fire rate, ammo, cooldown và pickup distance. Khi browser SignalR truyền token qua query string WebSocket, không log query token.
 
 Structured log nên có `MatchId`, `RoomId`, `PlayerId`, `ConnectionId`, `ServerTick` khi liên quan. Metrics: active connections/matches, players/match, tick duration, snapshot bytes, messages/s, dropped inputs, latency. Không log từng tick. Tick 30 Hz có ngân sách khoảng 33,33 ms; dùng spatial grid, pool và hạn chế allocation trong loop khi profiling chỉ ra vấn đề.
 

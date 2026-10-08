@@ -1,6 +1,6 @@
 # Cài đặt và chạy Scrap Street trên máy mới
 
-Tài liệu này mô tả trạng thái **Phase 1**. Game lái thử chạy offline trong trình duyệt. API đăng ký/đăng nhập cần PostgreSQL. Redis đã có trong `compose.yaml` nhưng chưa được code Phase 1 sử dụng.
+Tài liệu này mô tả trạng thái **Phase 2**. Game lái thử chạy offline trong trình duyệt; sau đăng nhập, client kết nối vào development match qua SignalR. API đăng ký/đăng nhập và trận online cần PostgreSQL để API khởi động. Redis có trong `compose.yaml` nhưng chưa được code sử dụng.
 
 ## 1. Phần mềm cần có
 
@@ -12,7 +12,7 @@ Tài liệu này mô tả trạng thái **Phase 1**. Game lái thử chạy offl
 | PostgreSQL | 16 trong môi trường phát triển/Compose | `psql --version` |
 | Docker Compose | Tùy chọn, dùng nếu muốn chạy DB/API bằng container | `docker compose version` |
 
-`client/package-lock.json` khóa phiên bản npm đã cài. Dùng `npm ci` trên máy mới để cài đúng các phiên bản trong lockfile. Nếu dùng phiên bản Node khác, cần kiểm tra yêu cầu của Vite trong `client/package.json` và chạy build lại.
+`client/package-lock.json` khóa phiên bản npm đã cài, gồm `@microsoft/signalr`. Dùng `npm ci` trên máy mới để cài đúng các phiên bản trong lockfile. Nếu dùng phiên bản Node khác, cần kiểm tra yêu cầu của Vite trong `client/package.json` và chạy build lại.
 
 ## 2. Lấy source và kiểm tra
 
@@ -86,6 +86,9 @@ Nếu máy đã có PostgreSQL chiếm cổng 5432, chọn cách **3A** hoặc b
 3. Bấm **Lái thử offline**; xe xuất hiện ở giữa map. WASD/phím mũi tên di chuyển, chuột xoay hướng súng, camera theo xe, nhà chặn đường. Đây là chuyển động client offline, chưa có combat.
 4. Đăng ký một tài khoản mới: username 3–24 ký tự ASCII gồm chữ/số/gạch dưới; mật khẩu 12–128 ký tự. Đăng xuất và đăng nhập lại. API lưu user trong bảng `users`.
 5. Đăng nhập sai mật khẩu trả HTTP 401; đăng ký username trùng trả HTTP 409; `/api/me` chỉ trả dữ liệu khi có bearer token hợp lệ.
+6. Đăng nhập hai tài khoản trong hai tab/trình duyệt, cả hai sẽ vào trận thử online. Mỗi tab thấy hai xe và vị trí di chuyển của nhau. Ngắt một tab thì xe đó biến mất khỏi tab còn lại.
+
+Kiểm thử tích hợp tự động khi API đang chạy: `cd client`, `npm run test:realtime`. Kiểm thử trình duyệt bằng `npm run test:browser` cần Edge/Chrome chạy CDP tại `127.0.0.1:9224` và Vite tại `127.0.0.1:5173`. Node 22 được dùng cho hai script test vì hỗ trợ `--experimental-strip-types`; tính năng game trên trình duyệt không phụ thuộc cờ Node này.
 
 Tài khoản `demo` được tạo trong database **trên máy phát triển ban đầu**, không nằm trong source/migration. Máy mới cần tự đăng ký tài khoản.
 
