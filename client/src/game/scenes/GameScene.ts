@@ -2,7 +2,12 @@ import Phaser from 'phaser';
 import { BUILDINGS, BUSHES, MAP, inBush } from '../config/map';
 import type { GameNetworkAdapter } from '../network/GameNetworkAdapter';
 import type { PlayerState } from '../../services/realtime/RealtimeClient';
-import { WeaponKind, type ImpactEvent, type ProjectileState, type HazardState } from '../network/BinaryGameCodec';
+import {
+  WeaponKind,
+  type ImpactEvent,
+  type ProjectileState,
+  type HazardState,
+} from '../network/BinaryGameCodec';
 
 export type GameControls = {
   moveX: number;
@@ -34,7 +39,10 @@ export class GameScene extends Phaser.Scene {
   private lastShot = 0;
   private shotGraphics!: Phaser.GameObjects.Graphics;
   private lastVisualTick = 0;
-  private projectiles = new Map<number, { body: Phaser.GameObjects.Arc; shadow?: Phaser.GameObjects.Arc }>();
+  private projectiles = new Map<
+    number,
+    { body: Phaser.GameObjects.Arc; shadow?: Phaser.GameObjects.Arc }
+  >();
   private hazards = new Map<number, Phaser.GameObjects.Arc>();
   private remotes = new Map<
     string,
@@ -133,10 +141,16 @@ export class GameScene extends Phaser.Scene {
       ? this.controls.aimAngle
       : Phaser.Math.Angle.Between(this.vehicle.x, this.vehicle.y, target.x, target.y);
     this.turret.rotation = aimAngle - this.vehicle.rotation;
-    const cooldown = this.controls.weapon === WeaponKind.Rocket ? 1000 :
-      this.controls.weapon === WeaponKind.Artillery ? 1500 :
-      this.controls.weapon === WeaponKind.Mud ? 667 :
-      this.controls.weapon === WeaponKind.Laser ? 400 : 234;
+    const cooldown =
+      this.controls.weapon === WeaponKind.Rocket
+        ? 1000
+        : this.controls.weapon === WeaponKind.Artillery
+          ? 1500
+          : this.controls.weapon === WeaponKind.Mud
+            ? 667
+            : this.controls.weapon === WeaponKind.Laser
+              ? 400
+              : 234;
     if (this.controls.fire && time - this.lastShot >= cooldown) {
       this.lastShot = time;
       this.fire(aimAngle);
@@ -240,9 +254,16 @@ export class GameScene extends Phaser.Scene {
 
   private fire(angle: number): void {
     const weapon = this.controls.weapon;
-    const range = weapon === WeaponKind.Artillery ? this.controls.artilleryRange :
-      weapon === WeaponKind.Laser ? 2800 : weapon === WeaponKind.Bullet ? 1800 :
-      weapon === WeaponKind.Rocket ? 2200 : 1200;
+    const range =
+      weapon === WeaponKind.Artillery
+        ? this.controls.artilleryRange
+        : weapon === WeaponKind.Laser
+          ? 2800
+          : weapon === WeaponKind.Bullet
+            ? 1800
+            : weapon === WeaponKind.Rocket
+              ? 2200
+              : 1200;
     if (this.network) {
       if (this.network.world.get(this.network.playerId)?.health === 0) return;
       this.network.fire(weapon, range);
@@ -269,25 +290,50 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private previewProjectile(startX: number, startY: number, endX: number, endY: number,
-    weapon: WeaponKind): void {
-    const color = weapon === WeaponKind.Rocket ? 0xff864f :
-      weapon === WeaponKind.Artillery ? 0xe4a65a :
-      weapon === WeaponKind.Mud ? 0x8a6247 : 0xffe09a;
+  private previewProjectile(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    weapon: WeaponKind,
+  ): void {
+    const color =
+      weapon === WeaponKind.Rocket
+        ? 0xff864f
+        : weapon === WeaponKind.Artillery
+          ? 0xe4a65a
+          : weapon === WeaponKind.Mud
+            ? 0x8a6247
+            : 0xffe09a;
     const radius = weapon === WeaponKind.Rocket ? 13 : weapon === WeaponKind.Artillery ? 15 : 9;
     const body = this.add.circle(startX, startY, radius, color).setDepth(19);
-    const duration = weapon === WeaponKind.Artillery ? 1500 :
-      Math.max(180, Math.hypot(endX - startX, endY - startY) /
-        (weapon === WeaponKind.Bullet ? 1100 : weapon === WeaponKind.Rocket ? 520 : 650) * 1000);
-    this.tweens.addCounter({ from: 0, to: 1, duration, onUpdate: (tween) => {
-      const p = tween.getValue() ?? 0;
-      body.setPosition(startX + (endX - startX) * p,
-        startY + (endY - startY) * p -
-          (weapon === WeaponKind.Artillery ? Math.sin(p * Math.PI) * 130 : 0));
-    }, onComplete: () => {
-      body.destroy();
-      this.drawImpact({ id: 0, x: endX, y: endY, weapon, hitNetworkId: 0, targetHealth: 0 });
-    } });
+    const duration =
+      weapon === WeaponKind.Artillery
+        ? 1500
+        : Math.max(
+            180,
+            (Math.hypot(endX - startX, endY - startY) /
+              (weapon === WeaponKind.Bullet ? 1100 : weapon === WeaponKind.Rocket ? 520 : 650)) *
+              1000,
+          );
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration,
+      onUpdate: (tween) => {
+        const p = tween.getValue() ?? 0;
+        body.setPosition(
+          startX + (endX - startX) * p,
+          startY +
+            (endY - startY) * p -
+            (weapon === WeaponKind.Artillery ? Math.sin(p * Math.PI) * 130 : 0),
+        );
+      },
+      onComplete: () => {
+        body.destroy();
+        this.drawImpact({ id: 0, x: endX, y: endY, weapon, hitNetworkId: 0, targetHealth: 0 });
+      },
+    });
   }
 
   private renderWorldEffects(projectiles: ProjectileState[], hazards: HazardState[]): void {
@@ -296,67 +342,130 @@ export class GameScene extends Phaser.Scene {
       seenProjectiles.add(projectile.id);
       let visual = this.projectiles.get(projectile.id);
       if (!visual) {
-        const color = projectile.weapon === WeaponKind.Rocket ? 0xff8952 :
-          projectile.weapon === WeaponKind.Artillery ? 0xe9ae66 :
-          projectile.weapon === WeaponKind.Mud ? 0x87634b : 0xffdf8e;
-        const radius = projectile.weapon === WeaponKind.Rocket ? 13 :
-          projectile.weapon === WeaponKind.Artillery ? 15 : 8;
-        const body = this.add.circle(projectile.x, projectile.y, radius, color)
-          .setStrokeStyle(3, 0x2d3942).setDepth(18);
-        const shadow = projectile.weapon === WeaponKind.Artillery ?
-          this.add.circle(projectile.x, projectile.y, 17, 0x111d24, 0.45).setDepth(4) : undefined;
+        const color =
+          projectile.weapon === WeaponKind.Rocket
+            ? 0xff8952
+            : projectile.weapon === WeaponKind.Artillery
+              ? 0xe9ae66
+              : projectile.weapon === WeaponKind.Mud
+                ? 0x87634b
+                : 0xffdf8e;
+        const radius =
+          projectile.weapon === WeaponKind.Rocket
+            ? 13
+            : projectile.weapon === WeaponKind.Artillery
+              ? 15
+              : 8;
+        const body = this.add
+          .circle(projectile.x, projectile.y, radius, color)
+          .setStrokeStyle(3, 0x2d3942)
+          .setDepth(18);
+        const shadow =
+          projectile.weapon === WeaponKind.Artillery
+            ? this.add.circle(projectile.x, projectile.y, 17, 0x111d24, 0.45).setDepth(4)
+            : undefined;
         visual = { body, shadow };
         this.projectiles.set(projectile.id, visual);
       }
-      const airborne = projectile.weapon === WeaponKind.Artillery ?
-        Math.sin(projectile.progress / 255 * Math.PI) * 130 : 0;
+      const airborne =
+        projectile.weapon === WeaponKind.Artillery
+          ? Math.sin((projectile.progress / 255) * Math.PI) * 130
+          : 0;
       this.tweens.killTweensOf(visual.body);
-      this.tweens.add({ targets: visual.body, x: projectile.x, y: projectile.y - airborne,
-        duration: 95, ease: 'Linear' });
+      this.tweens.add({
+        targets: visual.body,
+        x: projectile.x,
+        y: projectile.y - airborne,
+        duration: 95,
+        ease: 'Linear',
+      });
       if (visual.shadow) {
         this.tweens.killTweensOf(visual.shadow);
-        this.tweens.add({ targets: visual.shadow, x: projectile.x, y: projectile.y,
-          duration: 95, ease: 'Linear' });
+        this.tweens.add({
+          targets: visual.shadow,
+          x: projectile.x,
+          y: projectile.y,
+          duration: 95,
+          ease: 'Linear',
+        });
       }
     }
     for (const [id, visual] of this.projectiles) {
       if (seenProjectiles.has(id)) continue;
-      visual.body.destroy(); visual.shadow?.destroy(); this.projectiles.delete(id);
+      visual.body.destroy();
+      visual.shadow?.destroy();
+      this.projectiles.delete(id);
     }
     const seenHazards = new Set<number>();
     for (const hazard of hazards) {
       seenHazards.add(hazard.id);
       let puddle = this.hazards.get(hazard.id);
       if (!puddle) {
-        puddle = this.add.circle(hazard.x, hazard.y, 100, 0x684e3c, 0.62)
-          .setStrokeStyle(4, 0xa0805e, 0.8).setDepth(3);
+        puddle = this.add
+          .circle(hazard.x, hazard.y, 100, 0x684e3c, 0.62)
+          .setStrokeStyle(4, 0xa0805e, 0.8)
+          .setDepth(3);
         this.hazards.set(hazard.id, puddle);
       }
       puddle.setPosition(hazard.x, hazard.y).setAlpha(Math.min(0.65, hazard.remaining / 45));
     }
     for (const [id, puddle] of this.hazards) {
       if (seenHazards.has(id)) continue;
-      puddle.destroy(); this.hazards.delete(id);
+      puddle.destroy();
+      this.hazards.delete(id);
     }
   }
 
   private drawImpact(impact: ImpactEvent): void {
-    const radius = impact.weapon === WeaponKind.Rocket ? 110 :
-      impact.weapon === WeaponKind.Artillery ? 145 :
-      impact.weapon === WeaponKind.Mud ? 95 : 25;
-    const color = impact.weapon === WeaponKind.Mud ? 0x785440 :
-      impact.weapon === WeaponKind.Bullet ? 0xffe09a : 0xffa45e;
-    const blast = this.add.circle(impact.x, impact.y, radius, color, 0.55)
-      .setStrokeStyle(5, 0xffe8ae, 0.85).setDepth(17).setScale(0.2);
-    this.tweens.add({ targets: blast, scale: 1, alpha: 0, duration: 300,
-      onComplete: () => blast.destroy() });
+    const radius =
+      impact.weapon === WeaponKind.Rocket
+        ? 110
+        : impact.weapon === WeaponKind.Artillery
+          ? 145
+          : impact.weapon === WeaponKind.Mud
+            ? 95
+            : 25;
+    const color =
+      impact.weapon === WeaponKind.Mud
+        ? 0x785440
+        : impact.weapon === WeaponKind.Bullet
+          ? 0xffe09a
+          : 0xffa45e;
+    const blast = this.add
+      .circle(impact.x, impact.y, radius, color, 0.55)
+      .setStrokeStyle(5, 0xffe8ae, 0.85)
+      .setDepth(17)
+      .setScale(0.2);
+    this.tweens.add({
+      targets: blast,
+      scale: 1,
+      alpha: 0,
+      duration: 300,
+      onComplete: () => blast.destroy(),
+    });
     if (impact.hitNetworkId) {
-      const label = this.add.text(impact.x, impact.y - 28,
-        impact.targetHealth ? `${impact.targetHealth} HP` : 'HẠ GỤC',
-        { fontFamily: 'Arial', fontSize: '19px', color: '#ffe6a2',
-          stroke: '#263746', strokeThickness: 4 }).setOrigin(0.5).setDepth(25);
-      this.tweens.add({ targets: label, y: label.y - 28, alpha: 0, duration: 850,
-        onComplete: () => label.destroy() });
+      const label = this.add
+        .text(
+          impact.x,
+          impact.y - 28,
+          impact.targetHealth ? `${impact.targetHealth} HP` : 'HẠ GỤC',
+          {
+            fontFamily: 'Arial',
+            fontSize: '19px',
+            color: '#ffe6a2',
+            stroke: '#263746',
+            strokeThickness: 4,
+          },
+        )
+        .setOrigin(0.5)
+        .setDepth(25);
+      this.tweens.add({
+        targets: label,
+        y: label.y - 28,
+        alpha: 0,
+        duration: 850,
+        onComplete: () => label.destroy(),
+      });
     }
   }
 

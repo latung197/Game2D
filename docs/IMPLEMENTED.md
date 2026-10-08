@@ -1,47 +1,43 @@
 # Kiểm kê code hiện tại
 
-Tài liệu này mô tả tính năng đã triển khai, không phải toàn bộ yêu cầu sản phẩm. Kế hoạch nằm trong [PHASES.md](PHASES.md).
+Tài liệu này ghi đúng phần đang chạy trong repo ngày 2026-10-08. Lộ trình còn lại ở [PHASES.md](PHASES.md); byte layout chi tiết ở [PROTOCOL.md](PROTOCOL.md).
 
 ## Backend
 
 | Vị trí | Đã triển khai |
 |---|---|
-| `Game.Api/Program.cs` | Host ASP.NET Core, JWT, CORS, rate limit auth, migration khi khởi động, `/health`, `/api/auth/register`, `/api/auth/login`, `/api/me`, `/hubs/game` |
-| `Game.Application/Accounts/AuthService.cs` | Chuẩn hóa username, kiểm tra input, hash/verify password, phát JWT |
-| `Game.Infrastructure/Persistence/*` | EF Core/Npgsql, bảng `users`, unique username, migration `InitialAuth` |
-| `Game.Shared/Contracts/*` | Protocol version 3, byte codec little-endian, input 10 byte, snapshot `11 + 9 × số xe` byte, tia bắn 15 byte, radar response 6 byte |
-| `Game.Application/Abstractions/IMatchCommandGateway.cs` | Interface Hub → server và server → publisher |
-| `Game.Realtime/Hubs/*` | Hub yêu cầu JWT, lấy player ID từ claims; publisher gửi snapshot và tia bắn qua SignalR group |
-| `Game.Realtime/Connections/ConnectionRegistry.cs` | Theo dõi connection ID và player ID; bỏ player khi connection cuối rời đi |
-| `Game.Server/Matches/*` | Development match cố định, player runtime, command queue 1024, tick 30 Hz, snapshot khoảng 10 Hz |
+| `Game.Api` | ASP.NET Core host, JWT, CORS, auth rate limit, migration, `/health`, auth REST và `/hubs/game` |
+| `Game.Infrastructure` | EF Core/Npgsql lưu tài khoản; state trận không lưu DB |
+| `Game.Shared/Contracts` | Binary protocol v4, codec little-endian cho input, fire, snapshot, laser, radar, impact |
+| `Game.Realtime` | Hub xác thực JWT, route lệnh, publisher phát byte payload bằng SignalR MessagePack |
+| `Game.Server/Matches` | Development match tối đa 10 người, tick 30 Hz, movement/collision, HP, radar, projectile, bùn |
+| `Game.Application` | Auth service, abstraction kết nối Hub/server/publisher |
 
-`Game.Domain` vẫn là project khung. `Game.Api` là host duy nhất; chưa có process game server riêng. Redis nằm trong Compose nhưng chưa được code sử dụng. Database chỉ lưu tài khoản; state trận ở memory.
+Client gửi input 10 byte khoảng 20 lần/giây; server kiểm tra sequence và giới hạn trục, tự tính vị trí tối đa 280 unit/s, va nhà và biên map. Match xử lý tối đa 1024 command/tick, gửi snapshot riêng cho từng người khoảng 10 Hz qua outbound worker, chỉ giữ bản snapshot mới nhất. Không chờ DB hoặc network trong tick. Đạn thường, tên lửa, pháo và bùn được server tạo/di chuyển/va chạm; laser là hitscan. Server tính damage, nổ lan, HP, chết và hồi sinh sau 3 giây. Xe trong vũng bùn giảm tốc xuống 126 unit/s trong 4 giây tồn tại của vũng. Lệnh Fire nhận 5 byte gồm loại đạn và tầm bắn, không tin tọa độ/damage do client gửi.
 
-### Auth
+| Vũ khí | Tầm tối đa | Cooldown | Hiệu ứng |
+|---|---:|---:|---|
+| Đạn xa | 1800 | 7 tick | 25 HP, bay 1100 unit/s |
+| Laser | 2800 | 12 tick | 25 HP, tia tức thời bị nhà chắn |
+| Tên lửa | 2200 | 30 tick | Nổ 40 HP trong bán kính 110 |
+| Pháo | 1350 | 45 tick | Rơi sau 45 tick, nổ 45 HP trong bán kính 145 |
+| Bùn | 1200 | 20 tick | Vũng tồn tại 120 tick, làm chậm 55% |
 
-`register` nhận username 3–24 ký tự ASCII (chữ/số/gạch dưới) và password 12–128 ký tự, lowercase username, dùng `PasswordHasher<Account>`, trả `playerId`, `username`, `accessToken`. Username trùng trả 409. `login` sai trả 401. JWT hết hạn sau 30 phút, chứa account GUID trong `sub`. `/api/me` yêu cầu bearer token. Hai endpoint auth được rate limit 10 request/phút/IP. `sessionStorage` giữ token phía client, logout chỉ xóa token; chưa có refresh token hoặc server revocation.
-
-### Realtime
-
-Client kết nối `/hubs/game` bằng SignalR MessagePack với JWT rồi gọi `JoinMatch`. Hub lấy GUID người chơi từ claim đã xác thực, không dùng ID trong payload. Runtime tối đa 10 player; join thành công mới vào SignalR group. Input gửi dưới dạng 10 byte gồm version, sequence, trục di chuyển, góc ngắm và flags dự phòng. Gói sai version/độ dài/trục, hoặc sequence cũ/trùng bị bỏ. Server chuẩn hóa đường chéo, di chuyển tối đa 280 world units/giây, chặn biên map và bounding box nhà. Server không nhận tọa độ hay damage từ client. Xem [PROTOCOL.md](PROTOCOL.md).
-
-`MatchManager` đọc tối đa 1024 command mỗi tick, gọi `MatchRuntime.Step()` mỗi 1/30 giây. Snapshot riêng cho từng người được xếp vào queue chỉ giữ bản mới nhất mỗi 3 tick; worker riêng mã hóa byte rồi gửi SignalR, không chờ network trong tick. Lệnh Fire giới hạn 7 tick, server tính tia va vào nhà/xe/rìa map và gửi sự kiện binary qua queue riêng. Mỗi lần trúng trừ 25/100 HP; xe chết ngừng di chuyển/bắn và hồi sinh sau 3 giây. Lệnh radar được server giới hạn 6 giây hiệu lực, 30 giây hồi. GUID/username gửi qua roster lúc join và event khi player vào/rời trận; snapshot chỉ dùng network ID 2 byte. Chưa có projectile vật lý, ammo, item nhặt trên map, zone, room lifecycle hay nhiều match đang hoạt động.
+Snapshot v4 dài `11 + 10 × số xe + 8 × số projectile + 7 × số vũng` byte. Event laser 15 byte và impact 12 byte. Radar bật 6 giây, hồi 30 giây; server lọc xe trong bụi và vật thể xa theo người xem. Redis có trong Compose nhưng runtime chưa dùng. `Game.Domain` vẫn là khung. Chưa có ammo/reload, item nhặt, bo, nhiều match song song, room browser, prediction/interpolation hoặc cơ chế scale tới 50 người/trận.
 
 ## Client
 
-`client/src/ui/App.tsx` có landing, đăng ký/đăng nhập và lái thử offline. Sau đăng nhập, `PhaserGame` tạo `GameNetworkAdapter`, kết nối SignalR, tự join/rejoin. `ClientWorldState` giữ snapshot mới nhất. `GameScene` gửi input khoảng 20 lần/giây, render vị trí self/remote từ snapshot, dọn xe remote khi rời trận. Chưa có prediction/reconciliation/interpolation nên chuyển động online có thể giật.
-
-Map Phaser Graphics 3200×2200 có mười nhà, đường và bụi cây; dữ liệu nhà ở `client/src/game/config/map.ts`. Offline dùng WASD/phím mũi tên, chuột xoay turret, camera follow và collision đơn giản. Online dùng cùng map/điều khiển, nhưng vị trí do server quyết định. HUD có HP, minimap, radar mở bản đồ lớn theo xác nhận của server, hai cần ảo và nút bắn trên màn hình cảm ứng. Server chỉ gửi xe trong bán kính 850 units; xe đang nấp bụi chỉ hiện khi lại gần 145 units, trừ khi radar đang bật. Chưa có tilemap hay physics engine.
+React/Vite/Phaser có auth, lái thử offline và vào development match online. Map Graphics 3200×2200 có nhà, đường, bụi; camera, minimap, radar phóng to, HUD HP/trạng thái, điều khiển chuột/bàn phím hoặc hai cần ảo và nút bắn trên điện thoại. Thanh vũ khí chọn năm loại bằng nút hoặc phím 1–5; pháo có thanh chọn tầm. Client render projectile từ snapshot, cung bay pháo, laser, vụ nổ và vũng bùn. Online dùng vị trí/HP do server gửi. Offline là bản lái thử hiệu ứng, không mô phỏng cùng luật server.
 
 ## Kiểm thử đã thực hiện
 
-| Kiểm tra | Kết quả |
+| Lệnh | Kết quả |
 |---|---|
-| `dotnet build Game.sln --no-restore` | Thành công, 0 warning/0 error |
-| `cd client; npm run build` | Thành công; Vite cảnh báo chunk Phaser lớn và annotation trong SignalR package |
-| `cd client; npm run format:check` | Thành công; Prettier dùng `endOfLine: auto` để chấp nhận LF/CRLF theo file trên Windows |
-| `npm run test:realtime` | Hai account thấy nhau qua byte codec; bắn trúng 25 HP/phát, giới hạn nhịp bắn, chết/hồi sinh, stealth/radar server, input sai, reconnect; snapshot hai xe 29 byte, tia bắn 15 byte, khoảng 10 snapshot/giây |
-| `npm run test:browser` | Hai tab Edge headless render Phaser; payload WebSocket chứa snapshot hai xe đo được 47 byte; viewport điện thoại dọc/ngang và điều khiển chạm hoạt động |
-| API không có player | Working set 87.6 → 87.5 MB, private memory 44.6 → 44.5 MB trong 5 giây quan sát; không thấy tăng liên tục trong mẫu ngắn này |
+| `dotnet build Game.sln --no-restore` | Build backend |
+| `cd client; npm run build` | TypeScript và Vite build |
+| `cd client; npm run format:check` | Kiểm tra format |
+| `cd client; npm run test:realtime` | Hai client, binary snapshot/laser, HP/death/respawn, stealth/radar, input sai, reconnect |
+| `cd client; npm run test:weapons` | Đường đạn, nổ lan, pháo, bùn làm chậm/hết hạn, impact binary |
+| `cd client; npm run test:browser` | Hai tab Edge và bố cục điều khiển chạm portrait/landscape |
 
-Kiểm thử dùng PostgreSQL tạm cổng 55432 vì mật khẩu role `scrap` của PostgreSQL đang chạy tại cổng 5432 không khớp cấu hình mẫu. Không dùng Docker; Compose chưa được smoke test. Browser test mới dùng giả lập kích thước/chạm của Edge, chưa thử Safari iOS hay thiết bị thật. Chưa có test riêng cho rule simulation với độ trễ hoặc tải lớn.
+Kiểm thử browser dùng Edge giả lập kích thước/chạm, chưa thay thế test trên Safari iOS hoặc thiết bị Android thật. Các bài test realtime dùng PostgreSQL tạm cổng 55432 trên máy phát triển. Chưa có load test 50 người/trận hoặc 10.000 người đồng thời.

@@ -234,21 +234,45 @@ export function PhaserGame({ session }: { session: Session | null }): React.JSX.
         <strong>{hud.health}</strong>
       </div>
       <div className="weapon-dock" aria-label="Chọn loại đạn">
-        <div className="weapon-title">VŨ KHÍ <span>1–5 ĐỂ ĐỔI</span></div>
-        <div className="weapon-list">
-          {WEAPONS.map((item) => <button key={item.kind} type="button"
-            className={`weapon-option ${weapon === item.kind ? 'selected' : ''}`}
-            aria-label={item.name} aria-pressed={weapon === item.kind}
-            onClick={() => { controls.current.weapon = item.kind; setWeapon(item.kind); }}>
-            <strong>{item.icon}</strong><small>{item.short}</small>
-          </button>)}
+        <div className="weapon-title">
+          VŨ KHÍ <span>1–5 ĐỂ ĐỔI</span>
         </div>
-        {weapon === WeaponKind.Artillery && <label className="artillery-range">
-          TẦM PHÁO <input type="range" min="150" max="1350" step="50" value={artilleryRange}
-            onChange={(event) => { const value = Number(event.target.value);
-              controls.current.artilleryRange = value; setArtilleryRange(value); }} />
-          <span>{artilleryRange}m</span>
-        </label>}
+        <div className="weapon-list">
+          {WEAPONS.map((item) => (
+            <button
+              key={item.kind}
+              type="button"
+              className={`weapon-option ${weapon === item.kind ? 'selected' : ''}`}
+              aria-label={item.name}
+              aria-pressed={weapon === item.kind}
+              onClick={() => {
+                controls.current.weapon = item.kind;
+                setWeapon(item.kind);
+              }}
+            >
+              <strong>{item.icon}</strong>
+              <small>{item.short}</small>
+            </button>
+          ))}
+        </div>
+        {weapon === WeaponKind.Artillery && (
+          <label className="artillery-range">
+            TẦM PHÁO{' '}
+            <input
+              type="range"
+              min="150"
+              max="1350"
+              step="50"
+              value={artilleryRange}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                controls.current.artilleryRange = value;
+                setArtilleryRange(value);
+              }}
+            />
+            <span>{artilleryRange}m</span>
+          </label>
+        )}
       </div>
       <div className="minimap-panel">
         <div className="minimap-heading">
@@ -289,9 +313,14 @@ export function PhaserGame({ session }: { session: Session | null }): React.JSX.
         </div>
       )}
       <div className="game-bottom-hud">
-        <span>{hud.status ? '◈ DÍNH BÙN · XE CHẠY CHẬM' :
-          hud.hidden ? '◈ ĐANG ẨN TRONG BỤI' : '◈ TÌM BỤI ĐỂ ẨN NẤP'}</span>
-        <span className="desktop-hint">WASD DI CHUYỂN · CHUỘT NGẮM · BẤM ĐỂ BẮN</span>
+        <span>
+          {hud.status
+            ? '◈ DÍNH BÙN · XE CHẠY CHẬM'
+            : hud.hidden
+              ? '◈ ĐANG ẨN TRONG BỤI'
+              : '◈ TÌM BỤI ĐỂ ẨN NẤP'}
+        </span>
+        <span className="desktop-hint">WASD DI CHUYỂN · CHUỘT NGẮM/BẮN · PHÍM 1–5 ĐỔI ĐẠN</span>
       </div>
       <div className="touch-controls">
         {stick(false)}

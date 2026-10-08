@@ -40,11 +40,11 @@ Game.Shared: DTO/enum/network contract dùng tại các ranh giới phù hợp
 - `client/src/ui/App.tsx`: form đăng ký/đăng nhập, lưu access token trong `sessionStorage`, có nút vào lái thử offline. `auth.ts` gọi REST qua Vite proxy.
 - `client/src/game/scenes/GameScene.ts`: vẽ map placeholder bằng Phaser Graphics, nhận WASD/arrow, aim theo chuột, kiểm tra va chạm với các nhà, camera theo xe. **Toàn bộ movement này là client offline**.
 
-Đây là phần mô tả **lịch sử Phase 1**. Phase 2 đã thêm Hub và movement server; room lifecycle, projectile, damage, zone, loot, Redis integration, refresh token, server logout và thống kê vẫn chưa có. Chỉ có bảng `users` được tạo; các bảng còn lại ở mục 10 là kế hoạch.
+Đây là phần mô tả **lịch sử Phase 1**. Sau đó Phase 2 đã thêm Hub và movement server; bản thử combat có projectile, damage, HP và vũng bùn. Room lifecycle, zone, loot, Redis integration, refresh token, server logout và thống kê vẫn chưa có. Chỉ có bảng `users` được tạo; các bảng còn lại ở mục 10 là kế hoạch.
 
 ## 4. MatchRuntime dự kiến
 
-Phase 2 đã triển khai một `MatchRuntime` development với player movement, command queue và tick 30 Hz. Mô hình nhiều room, các gameplay system và xử lý lỗi từng match dưới đây vẫn là kế hoạch.
+Phase 2 đã triển khai một `MatchRuntime` development với player movement, năm vũ khí, command queue và tick 30 Hz. Mô hình nhiều room, các gameplay system đầy đủ và xử lý lỗi từng match dưới đây vẫn là kế hoạch.
 
 Mỗi room đang chơi có đúng một `MatchRuntime`, sở hữu `World`, `Players`, `Projectiles`, `Items`, `Zone`, `SpatialGrid`, command queue và tick counter. Một nơi duy nhất sửa state của match: fixed simulation loop. Hub nhận command đã xác thực, kiểm tra sơ bộ kích thước/tần suất rồi xếp vào queue có giới hạn. Các system xử lý command ở tick kế tiếp.
 
@@ -54,7 +54,7 @@ Thứ tự tick đề xuất: lấy input hợp lệ → status/movement/collisi
 
 ## 5. Protocol realtime hiện tại và dự kiến
 
-Hiện có REST auth và SignalR MessagePack `/hubs/game`: `JoinMatch`, `InputBatch` 10 byte, `Snapshot` binary `11 + 9 × số xe` byte; `JoinMatch` trả roster/`JoinAccepted`. `PlayerJoined`/`PlayerLeft` cập nhật metadata. Chi tiết little-endian, lượng tử hóa tọa độ/góc và version ở [PROTOCOL.md](PROTOCOL.md). Các REST room/profile/leaderboard và lệnh `LeaveMatch`, `PickupRequest`, `CommandRejected` là hợp đồng dự kiến, chưa triển khai. `GameEvent` đã có contract/publisher nhưng chưa phát từ gameplay.
+Hiện có REST auth và SignalR MessagePack `/hubs/game`: `JoinMatch`, `InputBatch` 10 byte, `Fire` 5 byte, `Snapshot` binary `11 + 10 × số xe + 8 × số đạn + 7 × số vũng bùn` byte; `JoinMatch` trả roster/`JoinAccepted`. `PlayerJoined`/`PlayerLeft` cập nhật metadata. Laser có event `Shot` 15 byte, đạn bay có `Impact` 12 byte và radar trả 6 byte. Chi tiết little-endian, lượng tử hóa tọa độ/góc và version ở [PROTOCOL.md](PROTOCOL.md). Các REST room/profile/leaderboard và lệnh `LeaveMatch`, `PickupRequest`, `CommandRejected` là hợp đồng dự kiến, chưa triển khai.
 
 ```text
 InputBatch dự kiến: sequence, clientTick, moveX/Y, aimAngle, fire, useItem
@@ -62,7 +62,7 @@ Snapshot dự kiến: serverTick, lastProcessedSequence, selfState,
   nearbyPlayers, projectiles, items, zone
 ```
 
-Client không được gửi position, damage, HP hoặc player ID làm nguồn sự thật. Server lấy identity từ authenticated connection. `sequence` giúp bỏ input cũ/trùng và chuẩn bị reconciliation; `serverTick` giúp interpolation về sau. Protocol binary v3 có version field để nâng cấp record khi thêm đạn/bom/bẫy; hai count dành chỗ trong header hiện luôn bằng 0. Snapshot lọc theo người xem để không phát tọa độ xe nấp bụi khi radar tắt. SignalR Hub chỉ route; `Game.Server` xử lý luật.
+Client không được gửi position, damage, HP hoặc player ID làm nguồn sự thật. Server lấy identity từ authenticated connection. `sequence` giúp bỏ input cũ/trùng và chuẩn bị reconciliation; `serverTick` giúp interpolation về sau. Protocol binary v4 có record cho projectile và vũng bùn; snapshot lọc theo người xem để không phát tọa độ xe nấp bụi hoặc vật thể quá xa khi radar tắt. SignalR Hub chỉ route; `Game.Server` xử lý luật vũ khí và va chạm.
 
 ## 6. Movement và render dự kiến
 

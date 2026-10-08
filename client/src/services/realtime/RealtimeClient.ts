@@ -106,7 +106,8 @@ export class RealtimeClient {
 
   fire(weapon: WeaponKind, range: number): void {
     if (this.connection.state !== 'Connected') return;
-    void this.connection.send('Fire', encodeFire(weapon, range))
+    void this.connection
+      .send('Fire', encodeFire(weapon, range))
       .catch(() => this.onStatus('Không gửi được phát bắn.'));
   }
 

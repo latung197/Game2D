@@ -151,6 +151,18 @@ try {
   assert.ok(bounds.scrollWidth <= bounds.width, JSON.stringify(bounds));
   assert.ok(bounds.map.right <= bounds.width && bounds.fire.right <= bounds.width, JSON.stringify(bounds));
   assert.ok(bounds.move.left >= 0, JSON.stringify(bounds));
+  const weaponBounds = await mobile.eval(`(() => {
+    const dock = document.querySelector('.weapon-dock').getBoundingClientRect();
+    const choices = [...document.querySelectorAll('.weapon-option')];
+    return {count: choices.length, left: dock.left, right: dock.right,
+      top: dock.top, bottom: dock.bottom, fireTop: document.querySelector('.fire-button').getBoundingClientRect().top};
+  })()`);
+  assert.equal(weaponBounds.count, 5);
+  assert.ok(weaponBounds.left >= 0 && weaponBounds.right <= bounds.width &&
+    weaponBounds.top >= 0 && weaponBounds.bottom < weaponBounds.fireTop, JSON.stringify(weaponBounds));
+  await mobile.eval("document.querySelectorAll('.weapon-option')[3].click()");
+  assert.equal(await mobile.eval("document.querySelector('.weapon-option.selected')?.getAttribute('aria-label')"), 'Pháo');
+  assert.ok(await mobile.eval("Boolean(document.querySelector('.artillery-range input[type=range]'))"));
   const beforeMove = await mobile.eval("Number(document.querySelector('.minimap-svg circle:last-child').getAttribute('cx'))");
   const movePoint = await mobile.eval(`(() => { const r = document.querySelector('.move-stick').getBoundingClientRect(); return {x:r.left+r.width*.8,y:r.top+r.height/2}; })()`);
   await mobile.cdp('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...movePoint, id: 1 }] });
@@ -167,10 +179,14 @@ try {
   const landscape = await mobile.eval(`(() => {
     const frame = document.querySelector('.game-frame').getBoundingClientRect();
     const fire = document.querySelector('.fire-button').getBoundingClientRect();
-    return {height:innerHeight, frameBottom:frame.bottom, fireRight:fire.right, width:innerWidth};
+    const dock = document.querySelector('.weapon-dock').getBoundingClientRect();
+    return {height:innerHeight, frameBottom:frame.bottom, fireRight:fire.right,
+      dockLeft:dock.left, dockRight:dock.right, dockBottom:dock.bottom, width:innerWidth};
   })()`);
   assert.ok(landscape.frameBottom <= landscape.height + 1, JSON.stringify(landscape));
   assert.ok(landscape.fireRight <= landscape.width, JSON.stringify(landscape));
+  assert.ok(landscape.dockLeft >= 0 && landscape.dockRight <= landscape.width &&
+    landscape.dockBottom <= landscape.height, JSON.stringify(landscape));
   console.log('PASS: portrait/landscape mobile controls and radar remain in view');
 } finally {
   if (mobile) await mobile.close();

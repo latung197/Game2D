@@ -20,12 +20,28 @@ export type CompactPlayerState = {
   status: number;
 };
 
-export type ProjectileState = { id: number; x: number; y: number; weapon: WeaponKind; progress: number };
+export type ProjectileState = {
+  id: number;
+  x: number;
+  y: number;
+  weapon: WeaponKind;
+  progress: number;
+};
 export type HazardState = { id: number; x: number; y: number; remaining: number };
-export type CompactSnapshot = { serverTick: number; players: CompactPlayerState[];
-  projectiles: ProjectileState[]; hazards: HazardState[] };
-export type ImpactEvent = { id: number; x: number; y: number; weapon: WeaponKind;
-  hitNetworkId: number; targetHealth: number };
+export type CompactSnapshot = {
+  serverTick: number;
+  players: CompactPlayerState[];
+  projectiles: ProjectileState[];
+  hazards: HazardState[];
+};
+export type ImpactEvent = {
+  id: number;
+  x: number;
+  y: number;
+  weapon: WeaponKind;
+  hitNetworkId: number;
+  targetHealth: number;
+};
 export type ShotTrace = {
   startX: number;
   startY: number;
@@ -48,12 +64,24 @@ export function encodeFire(weapon: WeaponKind, range: number): Uint8Array {
 
 export function decodeImpact(payload: Uint8Array | ArrayBuffer): ImpactEvent | null {
   const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
-  if (bytes.byteLength !== 12 || bytes[0] !== PROTOCOL_VERSION || bytes[1] !== 6 ||
-      bytes[8] < 1 || bytes[8] > 5 || bytes[11] > 100) return null;
+  if (
+    bytes.byteLength !== 12 ||
+    bytes[0] !== PROTOCOL_VERSION ||
+    bytes[1] !== 6 ||
+    bytes[8] < 1 ||
+    bytes[8] > 5 ||
+    bytes[11] > 100
+  )
+    return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return { id: view.getUint16(2, true), x: view.getUint16(4, true) / 16,
-    y: view.getUint16(6, true) / 16, weapon: bytes[8] as WeaponKind,
-    hitNetworkId: view.getUint16(9, true), targetHealth: bytes[11] };
+  return {
+    id: view.getUint16(2, true),
+    x: view.getUint16(4, true) / 16,
+    y: view.getUint16(6, true) / 16,
+    weapon: bytes[8] as WeaponKind,
+    hitNetworkId: view.getUint16(9, true),
+    targetHealth: bytes[11],
+  };
 }
 
 export function decodeRadar(payload: Uint8Array | ArrayBuffer): RadarResult | null {
@@ -105,8 +133,11 @@ export function decodeSnapshot(payload: Uint8Array | ArrayBuffer): CompactSnapsh
   if (
     view.getUint8(0) !== PROTOCOL_VERSION ||
     view.getUint8(1) !== SNAPSHOT_KIND ||
-    bytes.byteLength !== SNAPSHOT_HEADER_BYTES + count * PLAYER_BYTES +
-      projectileCount * PROJECTILE_BYTES + hazardCount * HAZARD_BYTES
+    bytes.byteLength !==
+      SNAPSHOT_HEADER_BYTES +
+        count * PLAYER_BYTES +
+        projectileCount * PROJECTILE_BYTES +
+        hazardCount * HAZARD_BYTES
   )
     return null;
   const players: CompactPlayerState[] = [];
@@ -129,17 +160,24 @@ export function decodeSnapshot(payload: Uint8Array | ArrayBuffer): CompactSnapsh
     const offset = projectileStart + i * PROJECTILE_BYTES;
     const weapon = view.getUint8(offset + 6);
     if (weapon < 1 || weapon > 5) return null;
-    projectiles.push({ id: view.getUint16(offset, true),
-      x: view.getUint16(offset + 2, true) / 16, y: view.getUint16(offset + 4, true) / 16,
-      weapon: weapon as WeaponKind, progress: view.getUint8(offset + 7) });
+    projectiles.push({
+      id: view.getUint16(offset, true),
+      x: view.getUint16(offset + 2, true) / 16,
+      y: view.getUint16(offset + 4, true) / 16,
+      weapon: weapon as WeaponKind,
+      progress: view.getUint8(offset + 7),
+    });
   }
   const hazards: HazardState[] = [];
   const hazardStart = projectileStart + projectileCount * PROJECTILE_BYTES;
   for (let i = 0; i < hazardCount; i++) {
     const offset = hazardStart + i * HAZARD_BYTES;
-    hazards.push({ id: view.getUint16(offset, true),
-      x: view.getUint16(offset + 2, true) / 16, y: view.getUint16(offset + 4, true) / 16,
-      remaining: view.getUint8(offset + 6) });
+    hazards.push({
+      id: view.getUint16(offset, true),
+      x: view.getUint16(offset + 2, true) / 16,
+      y: view.getUint16(offset + 4, true) / 16,
+      remaining: view.getUint8(offset + 6),
+    });
   }
   return { serverTick: view.getUint32(2, true), players, projectiles, hazards };
 }

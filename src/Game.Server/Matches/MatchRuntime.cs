@@ -182,6 +182,8 @@ public sealed class MatchRuntime(string id)
         }
         var distanceThisTick = Math.Min(rule.Speed / 30f, projectile.Range - projectile.Travelled);
         var samples = (int)MathF.Ceiling(distanceThisTick / 6f);
+        var lastSafeX = projectile.X;
+        var lastSafeY = projectile.Y;
         for (var sample = 0; sample <= samples; sample++)
         {
             var distance = Math.Min(distanceThisTick, sample * 6f);
@@ -189,6 +191,8 @@ public sealed class MatchRuntime(string id)
             var y = projectile.Y + projectile.Sin * distance;
             if (x < 0 || x > 3200 || y < 0 || y > 2200 || BlockedPoint(x, y))
             {
+                projectile.X = lastSafeX;
+                projectile.Y = lastSafeY;
                 ResolveImpact(projectile, null);
                 return true;
             }
@@ -201,6 +205,8 @@ public sealed class MatchRuntime(string id)
                 ResolveImpact(projectile, hit);
                 return true;
             }
+            lastSafeX = x;
+            lastSafeY = y;
         }
         projectile.X += projectile.Cos * distanceThisTick;
         projectile.Y += projectile.Sin * distanceThisTick;

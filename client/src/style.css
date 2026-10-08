@@ -1191,10 +1191,17 @@ button {
   margin-bottom: 7px;
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: .12em;
+  letter-spacing: 0.12em;
 }
-.weapon-title span { color: #b7c7bf; font-size: 9px; }
-.weapon-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.weapon-title span {
+  color: #b7c7bf;
+  font-size: 9px;
+}
+.weapon-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
 .weapon-option {
   min-width: 0;
   min-height: 48px;
@@ -1210,23 +1217,72 @@ button {
   color: #e7eee7;
   touch-action: manipulation;
 }
-.weapon-option strong { font-size: 20px; line-height: 1; }
-.weapon-option small { font-size: 8px; font-weight: 900; white-space: nowrap; }
-.weapon-option.selected { background: #f3be78; border-color: #fff1d2; color: #233846; }
-.artillery-range { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 9px; font-weight: 900; white-space: nowrap; }
-.artillery-range input { min-width: 0; flex: 1; accent-color: #f3be78; }
-.artillery-range span { min-width: 42px; text-align: right; color: #f3be78; }
+.weapon-option strong {
+  font-size: 20px;
+  line-height: 1;
+}
+.weapon-option small {
+  font-size: 8px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.weapon-option.selected {
+  background: #f3be78;
+  border-color: #fff1d2;
+  color: #233846;
+}
+.artillery-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 9px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.artillery-range input {
+  min-width: 0;
+  flex: 1;
+  accent-color: #f3be78;
+}
+.artillery-range span {
+  min-width: 42px;
+  text-align: right;
+  color: #f3be78;
+}
 
 @media (max-width: 700px), (pointer: coarse) {
-  .weapon-dock { bottom: 178px; width: calc(100% - 18px); padding: 6px; }
-  .weapon-title { margin-bottom: 4px; font-size: 8px; }
-  .weapon-title span { display: none; }
-  .weapon-option { min-height: 43px; }
-  .weapon-option strong { font-size: 18px; }
-  .weapon-option small { font-size: 7px; }
+  .weapon-dock {
+    bottom: 178px;
+    width: calc(100% - 18px);
+    padding: 6px;
+  }
+  .weapon-title {
+    margin-bottom: 4px;
+    font-size: 8px;
+  }
+  .weapon-title span {
+    display: none;
+  }
+  .weapon-option {
+    min-height: 43px;
+  }
+  .weapon-option strong {
+    font-size: 18px;
+  }
+  .weapon-option small {
+    font-size: 7px;
+  }
 }
 @media (max-height: 500px) and (orientation: landscape) {
-  .weapon-dock { bottom: 120px; width: min(360px, calc(100% - 300px)); }
-  .weapon-option { min-height: 36px; }
-  .weapon-title { display: none; }
+  .weapon-dock {
+    bottom: 120px;
+    width: min(360px, calc(100% - 300px));
+  }
+  .weapon-option {
+    min-height: 36px;
+  }
+  .weapon-title {
+    display: none;
+  }
 }
