@@ -1,9 +1,9 @@
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 const INPUT_KIND = 1;
 const SNAPSHOT_KIND = 2;
-export const INPUT_BYTES = 10;
-export const SNAPSHOT_HEADER_BYTES = 11;
-export const PLAYER_BYTES = 10;
+export const INPUT_BYTES = 14;
+export const SNAPSHOT_HEADER_BYTES = 15;
+export const PLAYER_BYTES = 14;
 export const PROJECTILE_BYTES = 8;
 export const HAZARD_BYTES = 7;
 export const WeaponKind = { Bullet: 1, Laser: 2, Rocket: 3, Artillery: 4, Mud: 5 } as const;
@@ -18,6 +18,8 @@ export type CompactPlayerState = {
   aimAngle: number;
   health: number;
   status: number;
+  velocityX: number;
+  velocityY: number;
 };
 
 export type ProjectileState = {
@@ -30,6 +32,7 @@ export type ProjectileState = {
 export type HazardState = { id: number; x: number; y: number; remaining: number };
 export type CompactSnapshot = {
   serverTick: number;
+  lastProcessedSequence: number;
   players: CompactPlayerState[];
   projectiles: ProjectileState[];
   hazards: HazardState[];
@@ -111,15 +114,17 @@ export function encodeInput(
   moveX: number,
   moveY: number,
   aimAngle: number,
+  clientTick = sequence,
 ): Uint8Array {
   const bytes = new Uint8Array(INPUT_BYTES);
   const view = new DataView(bytes.buffer);
   bytes[0] = PROTOCOL_VERSION;
   bytes[1] = INPUT_KIND;
   view.setUint32(2, sequence >>> 0, true);
-  view.setInt8(6, Math.round(Math.max(-1, Math.min(1, moveX)) * 127));
-  view.setInt8(7, Math.round(Math.max(-1, Math.min(1, moveY)) * 127));
-  bytes[8] = Math.round(((((aimAngle % TWO_PI) + TWO_PI) % TWO_PI) * 256) / TWO_PI) & 255;
+  view.setUint32(6, clientTick >>> 0, true);
+  view.setInt8(10, Math.round(Math.max(-1, Math.min(1, moveX)) * 127));
+  view.setInt8(11, Math.round(Math.max(-1, Math.min(1, moveY)) * 127));
+  bytes[12] = Math.round(((((aimAngle % TWO_PI) + TWO_PI) % TWO_PI) * 256) / TWO_PI) & 255;
   return bytes;
 }
 
@@ -152,6 +157,8 @@ export function decodeSnapshot(payload: Uint8Array | ArrayBuffer): CompactSnapsh
       aimAngle: (view.getUint8(offset + 7) * TWO_PI) / 256,
       health: view.getUint8(offset + 8),
       status: view.getUint8(offset + 9),
+      velocityX: view.getInt16(offset + 10, true),
+      velocityY: view.getInt16(offset + 12, true),
     });
   }
   const projectiles: ProjectileState[] = [];
@@ -179,5 +186,11 @@ export function decodeSnapshot(payload: Uint8Array | ArrayBuffer): CompactSnapsh
       remaining: view.getUint8(offset + 6),
     });
   }
-  return { serverTick: view.getUint32(2, true), players, projectiles, hazards };
+  return {
+    serverTick: view.getUint32(2, true),
+    lastProcessedSequence: view.getUint32(11, true),
+    players,
+    projectiles,
+    hazards,
+  };
 }

@@ -45,6 +45,7 @@ async function page(url = site) {
   let nextId = 0;
   const pending = new Map();
   const frames = [];
+  const errors = [];
   const binaryFrameBytes = [];
   socket.onmessage = ({ data }) => {
     const message = JSON.parse(data);
@@ -55,6 +56,8 @@ async function page(url = site) {
       if (snapshots.length)
         binaryFrameBytes.push(Buffer.from(response.payloadData, 'base64').length);
     }
+    if (message.method === 'Runtime.exceptionThrown')
+      errors.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
     if (message.id && pending.has(message.id)) {
       const { resolve, reject } = pending.get(message.id);
       pending.delete(message.id);
@@ -71,6 +74,7 @@ async function page(url = site) {
   await send('Runtime.enable');
   return {
     frames,
+    errors,
     binaryFrameBytes,
     cdp: send,
     async eval(expression) {
@@ -124,6 +128,47 @@ try {
     pages.map((p) => p.eval('Boolean(document.querySelector(".game-canvas canvas"))')),
   );
   assert.deepEqual(canvases, [true, true]);
+  await pages[0].cdp('Emulation.setDeviceMetricsOverride', {
+    width: 390, height: 844, deviceScaleFactor: 1, mobile: true,
+  });
+  await pages[0].cdp('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await pages[0].cdp('Page.bringToFront');
+  await waitFor(() => pages[0].eval("getComputedStyle(document.querySelector('.touch-controls')).display === 'flex'"));
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  await pages[0].cdp('Network.emulateNetworkConditions', {
+    offline: false, latency: 80, downloadThroughput: -1, uploadThroughput: -1,
+  });
+  const beforeSteer = await pages[0].eval("Number(document.querySelector('.minimap-svg circle:last-child').getAttribute('cx'))");
+  const watchedId = pages[1].frames.at(-1).players
+    .reduce((closest, player) => Math.abs(player.x - beforeSteer) < Math.abs(closest.x - beforeSteer) ? player : closest)
+    .networkId;
+  const onlineMovePoint = await pages[0].eval(`(() => {
+    const r = document.querySelector('.move-stick').getBoundingClientRect();
+    return {x:r.left+r.width*.8,y:r.top+r.height/2};
+  })()`);
+  await pages[0].cdp('Input.dispatchTouchEvent', { type: 'touchStart',
+    touchPoints: [{ ...onlineMovePoint, id: 1 }] });
+  await waitFor(async () =>
+    (await pages[0].eval("Number(document.querySelector('.minimap-svg circle:last-child').getAttribute('cx'))")) > beforeSteer + 8,
+  );
+  try {
+    await waitFor(() => pages[1].frames.at(-1)?.players
+      .find((player) => player.networkId === watchedId)?.x > beforeSteer + 8);
+  } catch (error) {
+    console.log(JSON.stringify({ beforeSteer, watchedId,
+      local: await pages[0].eval("Number(document.querySelector('.minimap-svg circle:last-child').getAttribute('cx'))"),
+      localFrame: pages[0].frames.at(-1)?.players,
+      localAck: pages[0].frames.at(-1)?.lastProcessedSequence,
+      remoteAck: pages[1].frames.at(-1)?.lastProcessedSequence,
+      localStatus: await pages[0].eval("document.querySelector('[role=status]')?.textContent"),
+      remote: pages[1].frames.at(-1)?.players, frameCount: pages[1].frames.length,
+      errors: pages[0].errors }));
+    throw error;
+  }
+  await pages[0].cdp('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await pages[0].cdp('Network.emulateNetworkConditions', {
+    offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+  });
   await pages[0].eval("document.querySelector('.radar-button').click()");
   await waitFor(() => pages[0].eval('Boolean(document.querySelector(".radar-overlay"))'));
   await mkdir('../.runtime-test', { recursive: true });
@@ -132,7 +177,7 @@ try {
   await pages[0].screenshot('../.runtime-test/phase2-browser.png');
   const sample = pages[0].binaryFrameBytes.find((_, i) => pages[0].frames[i]?.players.length === 2);
   console.log(
-    `PASS: two browser tabs rendered binary snapshots; two-player WebSocket payload ${sample} bytes`,
+    `PASS: two browser tabs rendered binary snapshots, local movement at 80ms simulated latency; two-player WebSocket payload ${sample} bytes`,
   );
   mobile = await page(new URL('?preview', site).href);
   await mobile.cdp('Emulation.setDeviceMetricsOverride', {

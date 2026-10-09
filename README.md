@@ -4,7 +4,7 @@ Game 2D top-down về những chiếc xe tự chế trong khu phố hoạt hình
 
 ## Trạng thái dự án
 
-**Phase 2 và bản thử combat đã triển khai (2026-10-08):** Phase 1 có API đăng ký/đăng nhập JWT và lái thử offline. Trận online dùng SignalR/WebSocket với MessagePack và payload binary v4: input 10 byte, Fire 5 byte, snapshot `11 + 10 × số xe + 8 × số đạn + 7 × số vũng bùn` byte. Server tick 30 Hz, gửi snapshot khoảng 10 Hz, tính đường đạn, va chạm, HP và bùn làm chậm. Có năm vũ khí: đạn xa, laser, tên lửa, pháo và bùn. Bản đồ 3200×2200 có minimap, radar và điều khiển chạm. Chưa có prediction, ammo, room browser hoặc gameplay hoàn chỉnh. Xem [IMPLEMENTED.md](docs/IMPLEMENTED.md) và [PROTOCOL.md](docs/PROTOCOL.md).
+**Phase 2 và bản thử Phase 3 đã triển khai (2026-10-09):** Có API đăng ký/đăng nhập JWT, lái thử offline và trận online SignalR/WebSocket MessagePack. Payload binary v5: input 14 byte, Fire 5 byte, snapshot `15 + 14 × số xe + 8 × số đạn + 7 × số vũng bùn` byte. Server tick 30 Hz, gửi snapshot khoảng 10 Hz, quyết định gia tốc, va chạm, HP và đường đạn. Client dự đoán xe mình, sửa sai theo ACK và nội suy xe khác. Có năm vũ khí: đạn xa, laser, tên lửa, pháo và bùn. Bản đồ 3200×2200 có minimap, radar và điều khiển chạm. Chưa có ammo, room browser hoặc gameplay hoàn chỉnh. Xem [IMPLEMENTED.md](docs/IMPLEMENTED.md) và [PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Tài liệu bắt đầu từ đây
 
@@ -33,6 +33,8 @@ npm run dev
 ```
 
 Mở `http://127.0.0.1:5173/`. Có thể bấm **Lái thử offline** ngay; đăng ký/đăng nhập cần API và PostgreSQL. Sau đăng nhập, mở thêm tài khoản khác trong trình duyệt/tab khác để vào cùng development match. Máy tính dùng WASD/phím mũi tên để di chuyển, chuột để ngắm, click để bắn; phím 1–5 đổi đạn. Điện thoại dùng hai cần ảo, nút Bắn và thanh chọn đạn. Pháo có thanh chỉnh tầm rơi. Nút radar phóng to minimap trong 6 giây, hồi 30 giây. Để thử trên điện thoại cùng Wi-Fi, chạy `npm run dev -- --host 0.0.0.0` rồi dùng IP Wi-Fi của máy tính ở cổng 5173. Endpoint kiểm tra API: `http://127.0.0.1:5080/health`.
+
+Giao diện trong trận ưu tiên điện thoại: khung game dùng gần hết màn hình, minimap và HUD thu gọn; xoay ngang thì thanh đạn chuyển sang góc trái để không che xe. Có thể kiểm tra bố cục với `cd client; npm run test:layout` khi Vite và Edge CDP đang chạy.
 
 ## Kiểm tra baseline
 

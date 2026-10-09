@@ -1,12 +1,17 @@
 import { RealtimeClient } from '../../services/realtime/RealtimeClient';
 import { ClientWorldState } from './ClientWorldState';
 import type { RadarResult, ShotTrace, ImpactEvent, WeaponKind } from './BinaryGameCodec';
+import { Prediction } from './Prediction';
+import { Interpolation } from './Interpolation';
+import type { MovementInput } from './Movement';
 
 export class GameNetworkAdapter {
   readonly world = new ClientWorldState();
+  readonly prediction = new Prediction();
+  readonly interpolation = new Interpolation();
   private readonly client: RealtimeClient;
   private sequence = 0;
-  private lastSent = 0;
+  private clientTick = 0;
   onShot: (shot: ShotTrace) => void = () => {};
   onImpact: (impact: ImpactEvent) => void = () => {};
 
@@ -16,14 +21,38 @@ export class GameNetworkAdapter {
     onStatus: (status: string) => void,
   ) {
     this.client = new RealtimeClient(accessToken);
-    this.client.onSnapshot = (snapshot) => this.world.apply(snapshot);
-    this.client.onRoster = (players) => this.world.setRoster(players);
+    this.client.onSnapshot = (snapshot) => {
+      const previousTick = this.world.serverTick;
+      this.world.apply(snapshot);
+      if (this.world.serverTick === previousTick) return;
+      const now = performance.now();
+      const self = this.world.get(this.playerId);
+      if (self) this.prediction.reconcile(self, this.world.lastProcessedSequence, now);
+      this.interpolation.push(
+        this.world.serverTick,
+        [...this.world.all()].filter((player) => player.playerId !== this.playerId),
+        now,
+      );
+    };
+    this.client.onRoster = (players) => {
+      this.world.setRoster(players);
+      this.prediction.clear();
+      this.interpolation.clear();
+    };
     this.client.onPlayerJoined = (player) => this.world.playerJoined(player);
     this.client.onPlayerLeft = (networkId) => this.world.playerLeft(networkId);
     this.client.onShot = (shot) => this.onShot(shot);
     this.client.onImpact = (impact) => this.onImpact(impact);
     this.client.onStatus = (status) => {
-      if (status !== 'Đã vào trận thử online.') this.world.clear();
+      if (
+        status === 'Đang kết nối lại...' ||
+        status === 'Mất kết nối máy chủ.' ||
+        status === 'Không vào lại được trận.'
+      ) {
+        this.world.clear();
+        this.prediction.clear();
+        this.interpolation.clear();
+      }
       onStatus(status);
     };
   }
@@ -32,11 +61,23 @@ export class GameNetworkAdapter {
     return this.client.start();
   }
 
-  sendInput(time: number, moveX: number, moveY: number, aimAngle: number): void {
-    if (time - this.lastSent < 50) return;
-    this.lastSent = time;
+  stepLocal(input: MovementInput): void {
+    if (!this.world.get(this.playerId)) return;
     this.sequence = (this.sequence + 1) >>> 0;
-    this.client.sendInput(this.sequence, moveX, moveY, aimAngle);
+    this.clientTick = (this.clientTick + 1) >>> 0;
+    const quantized = this.prediction.predict(
+      this.sequence,
+      this.clientTick,
+      input,
+      performance.now(),
+    );
+    this.client.sendInput(
+      this.sequence,
+      this.clientTick,
+      quantized.moveX,
+      quantized.moveY,
+      quantized.aimAngle,
+    );
   }
 
   stop(): Promise<void> {

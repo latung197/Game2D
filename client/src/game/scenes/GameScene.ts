@@ -8,6 +8,7 @@ import {
   type ProjectileState,
   type HazardState,
 } from '../network/BinaryGameCodec';
+import { quantizeInput, stepMovement, type MovementState } from '../network/Movement';
 
 export type GameControls = {
   moveX: number;
@@ -34,7 +35,8 @@ export class GameScene extends Phaser.Scene {
   private vehicle!: Phaser.GameObjects.Container;
   private turret!: Phaser.GameObjects.Graphics;
   private nameLabel!: Phaser.GameObjects.Text;
-  private speed = 280;
+  private movementAccumulator = 0;
+  private offlineMovement!: MovementState;
   private lastHud = 0;
   private lastShot = 0;
   private shotGraphics!: Phaser.GameObjects.Graphics;
@@ -111,6 +113,16 @@ export class GameScene extends Phaser.Scene {
     };
     this.arrows = this.input.keyboard!.createCursorKeys();
     this.vehicle = this.makeVehicle(1100, 640);
+    this.offlineMovement = {
+      x: 1100,
+      y: 640,
+      rotation: 0,
+      aimAngle: 0,
+      velocityX: 0,
+      velocityY: 0,
+      health: 100,
+      status: 0,
+    };
     this.cameras.main.centerOn(this.vehicle.x, this.vehicle.y);
     this.cameras.main.startFollow(this.vehicle, true, 0.09, 0.09);
     this.cameras.main.setZoom(0.82);
@@ -141,6 +153,13 @@ export class GameScene extends Phaser.Scene {
       ? this.controls.aimAngle
       : Phaser.Math.Angle.Between(this.vehicle.x, this.vehicle.y, target.x, target.y);
     this.turret.rotation = aimAngle - this.vehicle.rotation;
+    this.movementAccumulator = Math.min(100, this.movementAccumulator + Math.min(delta, 100));
+    while (this.movementAccumulator >= 1000 / 30) {
+      this.movementAccumulator -= 1000 / 30;
+      const input = { moveX: horizontal, moveY: vertical, aimAngle };
+      if (this.network) this.network.stepLocal(input);
+      else this.offlineMovement = stepMovement(this.offlineMovement, quantizeInput(input));
+    }
     const cooldown =
       this.controls.weapon === WeaponKind.Rocket
         ? 1000
@@ -173,21 +192,39 @@ export class GameScene extends Phaser.Scene {
       });
     }
     if (this.network) {
-      this.network.sendInput(time, horizontal, vertical, aimAngle);
       if (this.network.world.serverTick !== this.lastVisualTick) {
         this.lastVisualTick = this.network.world.serverTick;
         this.renderWorldEffects(this.network.world.projectiles, this.network.world.hazards);
       }
-      const self = this.network.world.get(this.network.playerId);
+      const self = this.network.prediction.state ?? this.network.world.get(this.network.playerId);
       if (self) {
-        this.vehicle.setPosition(self.x, self.y).setRotation(self.rotation);
+        const difference = Math.hypot(self.x - this.vehicle.x, self.y - this.vehicle.y);
+        if (this.network.prediction.hardReset || difference > 100) {
+          this.vehicle.setPosition(self.x, self.y).setRotation(self.rotation);
+          this.network.prediction.hardReset = false;
+        } else {
+          const fraction = 1 - Math.exp(-Math.min(delta, 50) / 65);
+          this.vehicle.setPosition(
+            Phaser.Math.Linear(this.vehicle.x, self.x, fraction),
+            Phaser.Math.Linear(this.vehicle.y, self.y, fraction),
+          );
+          this.vehicle.rotation = Phaser.Math.Angle.RotateTo(
+            this.vehicle.rotation,
+            self.rotation,
+            (Math.min(delta, 50) / 1000) * 10,
+          );
+        }
         this.vehicle.setAlpha(self.health === 0 ? 0.3 : 1);
         this.turret.rotation = self.aimAngle - self.rotation;
-        this.nameLabel.setPosition(self.x, self.y - 48).setText(self.username);
+        this.nameLabel
+          .setPosition(this.vehicle.x, this.vehicle.y - 48)
+          .setText(this.network.world.get(this.network.playerId)?.username ?? 'XE NHẶT SẮT');
       }
       const seen = new Set<string>();
       for (const player of this.network.world.all()) {
         if (player.playerId === this.network.playerId) continue;
+        const displayed =
+          this.network.interpolation.sample(player.playerId, performance.now()) ?? player;
         seen.add(player.playerId);
         let remote = this.remotes.get(player.playerId);
         if (!remote) {
@@ -207,14 +244,14 @@ export class GameScene extends Phaser.Scene {
           };
           this.remotes.set(player.playerId, remote);
         }
-        remote.vehicle.setPosition(player.x, player.y).setRotation(player.rotation);
+        remote.vehicle.setPosition(displayed.x, displayed.y).setRotation(displayed.rotation);
         remote.label
-          .setPosition(player.x, player.y - 48)
+          .setPosition(displayed.x, displayed.y - 48)
           .setText(`${player.username} · ${player.health} HP${player.status ? ' · BÙN' : ''}`);
         remote.vehicle.setAlpha(player.health === 0 ? 0.3 : 1);
         const hidden =
-          inBush(player.x, player.y) &&
-          Math.hypot(player.x - this.vehicle.x, player.y - this.vehicle.y) > 145;
+          inBush(displayed.x, displayed.y) &&
+          Math.hypot(displayed.x - this.vehicle.x, displayed.y - this.vehicle.y) > 145;
         remote.vehicle.setVisible(!hidden);
         remote.label.setVisible(!hidden);
       }
@@ -226,28 +263,9 @@ export class GameScene extends Phaser.Scene {
       }
       return;
     }
-    const length = Math.hypot(horizontal, vertical) || 1;
-    const seconds = Math.min(delta, 50) / 1000;
-    const nextX = Phaser.Math.Clamp(
-      this.vehicle.x + (horizontal / length) * this.speed * seconds,
-      35,
-      MAP.width - 35,
-    );
-    const nextY = Phaser.Math.Clamp(
-      this.vehicle.y + (vertical / length) * this.speed * seconds,
-      35,
-      MAP.height - 35,
-    );
-    if (!this.blocked(nextX, this.vehicle.y)) this.vehicle.x = nextX;
-    if (!this.blocked(this.vehicle.x, nextY)) this.vehicle.y = nextY;
-    if (horizontal || vertical) {
-      const desired = Math.atan2(vertical, horizontal);
-      this.vehicle.rotation = Phaser.Math.Angle.RotateTo(
-        this.vehicle.rotation,
-        desired,
-        seconds * 7,
-      );
-    }
+    this.vehicle
+      .setPosition(this.offlineMovement.x, this.offlineMovement.y)
+      .setRotation(this.offlineMovement.rotation);
     this.nameLabel.setPosition(this.vehicle.x, this.vehicle.y - 48);
     this.turret.rotation = aimAngle - this.vehicle.rotation;
   }
@@ -480,12 +498,6 @@ export class GameScene extends Phaser.Scene {
 
   private blockedPoint(x: number, y: number): boolean {
     return BUILDINGS.some((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-  }
-
-  private blocked(x: number, y: number): boolean {
-    return BUILDINGS.some(
-      (b) => x > b.x - 28 && x < b.x + b.w + 28 && y > b.y - 28 && y < b.y + b.h + 28,
-    );
   }
 
   private makeVehicle(x: number, y: number): Phaser.GameObjects.Container {

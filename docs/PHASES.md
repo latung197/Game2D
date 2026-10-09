@@ -1,6 +1,6 @@
 # Lộ trình phát triển Phase 1–10
 
-**Ngày cập nhật:** 2026-10-08. **Trạng thái thực tế:** Phase 1–2 đã triển khai; Phase 3–10 là kế hoạch. Chi tiết code và giới hạn Phase 2 ở [IMPLEMENTED.md](IMPLEMENTED.md).
+**Ngày cập nhật:** 2026-10-09. **Trạng thái thực tế:** Phase 1–2 và bản thử Phase 3 đã triển khai; các phase tiếp theo là kế hoạch. Chi tiết code và giới hạn hiện tại ở [IMPLEMENTED.md](IMPLEMENTED.md).
 
 Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room tối đa 10 người, 100 HP, Pistol, Health Kit, một safe zone, create/join room, damage/death/winner. Chỉ sau mốc này mới mở rộng troll item, interest management và cosmetics. Mỗi phase cần cập nhật tài liệu, chỉ rõ file tạo/sửa, lệnh chạy, test và kết quả quan sát được.
 
@@ -47,7 +47,7 @@ Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room t�
 
 **Hoàn tất khi:** hai client thấy vị trí của nhau qua server, mỗi runtime có state riêng, Hub không chứa luật gameplay. Chấp nhận movement còn hơi giật; Phase 3 xử lý độ mượt.
 
-## Phase 3 — movement authoritative và hình ảnh mượt — CHƯA LÀM
+## Phase 3 — movement authoritative và hình ảnh mượt — ĐÃ TRIỂN KHAI BẢN THỬ
 
 **Việc triển khai:**
 
@@ -62,6 +62,8 @@ Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room t�
 **Test bắt buộc:** mô phỏng độ trễ 50–100 ms; self đi ngay theo phím, remote di chuyển mượt; server sửa vị trí khi client cố gửi input sai/di chuyển xuyên tường; sequence cũ/trùng bị bỏ. Có test server về tốc độ tối đa, collision, dt và sequence; client test replay input chưa ack.
 
 **Hoàn tất khi:** server quyết định movement cuối cùng và cả local/remote có thể chơi được dưới độ trễ mục tiêu.
+
+**Trạng thái 2026-10-09:** đã có `PlayerMovementSystem` tăng tốc/phanh/xoay/va nhà tại 30 Hz; protocol v5 có `clientTick`, ACK riêng từng người và vận tốc; client dự đoán/replay, sửa sai và nội suy xe khác. Test server va nhà/sequence, test client replay/interpolation và hai tab Edge với trễ giả lập 80 ms đã qua. Chưa đo trễ trên thiết bị thật hoặc đường mạng thật; runtime vẫn một match tối đa 10 người.
 
 ## Phase 4 — room và nhiều match cô lập — CHƯA LÀM
 

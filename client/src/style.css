@@ -948,14 +948,28 @@ button {
 }
 
 @media (max-width: 700px), (pointer: coarse) {
+  .app-shell.is-playing {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
   .topbar {
-    height: 58px;
-    padding: 0 12px;
+    height: calc(44px + env(safe-area-inset-top));
+    flex: 0 0 auto;
+    padding: env(safe-area-inset-top) 10px 0;
+  }
+  .is-playing .topbar-center {
+    display: none;
+  }
+  .is-playing .brand {
+    font-size: 12px;
+    line-height: 11px;
+    gap: 7px;
   }
   .brand-icon {
-    width: 34px;
-    height: 34px;
-    font-size: 20px;
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
   }
   .topbar-right {
     gap: 6px;
@@ -972,92 +986,99 @@ button {
     font-size: 11px;
   }
   .play-layout {
-    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
-    gap: 8px;
+    flex: 1;
+    padding: 4px max(4px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom))
+      max(4px, env(safe-area-inset-left));
+    gap: 4px;
+    overflow: hidden;
   }
   .play-intro {
-    min-height: 49px;
-    gap: 8px;
+    min-height: 32px;
+    flex: 0 0 32px;
+    gap: 4px;
   }
   .play-intro .eyebrow {
-    font-size: 9px;
+    display: none;
   }
   .play-intro h1 {
-    font-size: 21px;
+    font-size: 15px;
   }
   .play-intro p {
     display: none;
   }
   .leave-button {
-    padding: 8px;
-    font-size: 11px;
-    min-height: 40px;
+    padding: 5px 9px;
+    font-size: 10px;
+    min-height: 32px;
   }
   .game-frame {
-    height: calc(100dvh - 156px - env(safe-area-inset-bottom));
-    min-height: 440px;
+    flex: 1;
+    height: auto;
+    min-height: 0;
     border-width: 2px;
-    border-radius: 12px;
-    box-shadow: 3px 3px #253746;
+    border-radius: 9px;
+    box-shadow: none;
   }
   .game-top-hud {
-    left: 9px;
-    top: 9px;
-    right: 151px;
+    left: 6px;
+    top: 6px;
+    right: 116px;
   }
   .arena-pill {
-    padding: 8px;
-    font-size: 9px;
+    padding: 5px 6px;
+    font-size: 8px;
     white-space: normal;
-    line-height: 1.4;
+    line-height: 1.2;
   }
   .coordinates {
     display: none;
   }
   .connection-status {
-    top: 94px;
-    left: 9px;
-    font-size: 9px;
-    max-width: 150px;
+    top: 70px;
+    left: 6px;
+    padding: 4px 6px;
+    font-size: 8px;
+    max-width: 126px;
   }
   .health-panel {
-    top: 52px;
-    left: 9px;
-    width: 148px;
-    padding: 7px;
-    font-size: 9px;
+    top: 34px;
+    left: 6px;
+    width: 118px;
+    padding: 5px 6px;
+    font-size: 8px;
   }
   .minimap-panel {
-    top: 9px;
-    right: 9px;
-    width: 132px;
-    padding: 7px;
+    top: 6px;
+    right: 6px;
+    width: 104px;
+    padding: 4px;
     border-width: 1px;
   }
   .minimap-heading {
-    font-size: 7px;
-    margin-bottom: 4px;
+    font-size: 6px;
+    margin-bottom: 2px;
   }
   .radar-button {
-    font-size: 9px;
-    padding: 8px 2px;
-    margin-top: 5px;
+    min-height: 30px;
+    font-size: 8px;
+    padding: 5px 2px;
+    margin-top: 3px;
   }
   .game-bottom-hud {
-    left: 9px;
-    right: 9px;
-    bottom: 8px;
-    padding: 7px 8px;
-    font-size: 9px;
+    left: 6px;
+    right: auto;
+    bottom: 4px;
+    padding: 4px 6px;
+    font-size: 8px;
   }
   .desktop-hint {
     display: none;
   }
   .touch-controls {
     position: absolute;
-    left: 13px;
-    right: 13px;
-    bottom: 56px;
+    left: 9px;
+    right: 9px;
+    bottom: 33px;
     display: flex;
     align-items: end;
     justify-content: space-between;
@@ -1069,8 +1090,8 @@ button {
     gap: 8px;
   }
   .touch-stick {
-    width: 102px;
-    height: 102px;
+    width: 88px;
+    height: 88px;
     border-radius: 50%;
     border: 2px solid #f1d6aaab;
     background: #1d3541aa;
@@ -1085,8 +1106,8 @@ button {
   .touch-stick .stick-knob {
     display: grid;
     place-items: center;
-    width: 45px;
-    height: 45px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     background: #e8b877df;
     color: #263b47;
@@ -1101,9 +1122,9 @@ button {
     letter-spacing: 0.1em;
   }
   .fire-button {
-    width: 66px;
-    height: 66px;
-    margin-bottom: 18px;
+    width: 62px;
+    height: 62px;
+    margin-bottom: 12px;
     border-radius: 50%;
     border: 3px solid #ffe1a6;
     background: #e78369e8;
@@ -1125,12 +1146,12 @@ button {
 
 @media (max-width: 380px) {
   .touch-stick {
-    width: 88px;
-    height: 88px;
+    width: 80px;
+    height: 80px;
   }
   .fire-button {
-    width: 58px;
-    height: 58px;
+    width: 56px;
+    height: 56px;
   }
   .touch-right {
     gap: 5px;
@@ -1144,27 +1165,28 @@ button {
     display: none;
   }
   .play-layout {
-    padding: 5px;
+    padding: 4px max(4px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom))
+      max(4px, env(safe-area-inset-left));
     gap: 0;
   }
   .game-frame {
-    height: calc(100dvh - 10px);
+    height: auto;
     min-height: 0;
   }
   .touch-controls {
-    bottom: 30px;
+    bottom: 26px;
   }
   .touch-stick {
-    width: 82px;
-    height: 82px;
+    width: 76px;
+    height: 76px;
   }
   .fire-button {
-    width: 58px;
-    height: 58px;
-    margin-bottom: 10px;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 7px;
   }
   .minimap-panel {
-    width: 128px;
+    width: 104px;
   }
   .game-bottom-hud {
     bottom: 4px;
@@ -1253,36 +1275,75 @@ button {
 
 @media (max-width: 700px), (pointer: coarse) {
   .weapon-dock {
-    bottom: 178px;
-    width: calc(100% - 18px);
-    padding: 6px;
+    bottom: 137px;
+    width: min(306px, calc(100% - 12px));
+    padding: 4px;
+    border-radius: 8px;
   }
   .weapon-title {
-    margin-bottom: 4px;
-    font-size: 8px;
-  }
-  .weapon-title span {
     display: none;
   }
+  .weapon-list {
+    gap: 3px;
+  }
   .weapon-option {
-    min-height: 43px;
+    min-height: 44px;
+    gap: 1px;
   }
   .weapon-option strong {
-    font-size: 18px;
+    font-size: 16px;
   }
   .weapon-option small {
-    font-size: 7px;
+    font-size: 6px;
+  }
+  .artillery-range {
+    margin-top: 4px;
+    font-size: 8px;
+  }
+  .artillery-range input {
+    height: 24px;
   }
 }
 @media (max-height: 500px) and (orientation: landscape) {
   .weapon-dock {
-    bottom: 120px;
-    width: min(360px, calc(100% - 300px));
+    top: 98px;
+    bottom: auto;
+    left: 6px;
+    transform: none;
+    width: min(258px, calc(50% - 20px));
   }
   .weapon-option {
-    min-height: 36px;
+    min-height: 40px;
   }
-  .weapon-title {
-    display: none;
+  .artillery-range {
+    margin-top: 2px;
+  }
+}
+.is-playing .site-footer {
+  display: none;
+}
+
+@media (min-width: 701px) and (pointer: fine) {
+  .is-playing .topbar {
+    height: 64px;
+  }
+  .is-playing .brand-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .is-playing .play-layout {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    gap: 8px;
+  }
+  .is-playing .play-intro {
+    min-height: 42px;
+  }
+  .is-playing .play-intro h1 {
+    font-size: 26px;
+  }
+  .is-playing .game-frame {
+    height: min(900px, calc(100dvh - 142px));
+    min-height: 400px;
   }
 }

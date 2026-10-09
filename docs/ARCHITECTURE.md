@@ -54,7 +54,7 @@ Thứ tự tick đề xuất: lấy input hợp lệ → status/movement/collisi
 
 ## 5. Protocol realtime hiện tại và dự kiến
 
-Hiện có REST auth và SignalR MessagePack `/hubs/game`: `JoinMatch`, `InputBatch` 10 byte, `Fire` 5 byte, `Snapshot` binary `11 + 10 × số xe + 8 × số đạn + 7 × số vũng bùn` byte; `JoinMatch` trả roster/`JoinAccepted`. `PlayerJoined`/`PlayerLeft` cập nhật metadata. Laser có event `Shot` 15 byte, đạn bay có `Impact` 12 byte và radar trả 6 byte. Chi tiết little-endian, lượng tử hóa tọa độ/góc và version ở [PROTOCOL.md](PROTOCOL.md). Các REST room/profile/leaderboard và lệnh `LeaveMatch`, `PickupRequest`, `CommandRejected` là hợp đồng dự kiến, chưa triển khai.
+Hiện có REST auth và SignalR MessagePack `/hubs/game`: `JoinMatch`, `InputBatch` 14 byte, `Fire` 5 byte, `Snapshot` binary `15 + 14 × số xe + 8 × số đạn + 7 × số vũng bùn` byte; `JoinMatch` trả roster/`JoinAccepted`. `PlayerJoined`/`PlayerLeft` cập nhật metadata. Snapshot v5 có ACK input riêng cho người nhận và vận tốc từng xe; laser có event `Shot` 15 byte, đạn bay có `Impact` 12 byte và radar trả 6 byte. Chi tiết little-endian, lượng tử hóa tọa độ/góc và version ở [PROTOCOL.md](PROTOCOL.md). Các REST room/profile/leaderboard và lệnh `LeaveMatch`, `PickupRequest`, `CommandRejected` là hợp đồng dự kiến, chưa triển khai.
 
 ```text
 InputBatch dự kiến: sequence, clientTick, moveX/Y, aimAngle, fire, useItem
@@ -62,15 +62,15 @@ Snapshot dự kiến: serverTick, lastProcessedSequence, selfState,
   nearbyPlayers, projectiles, items, zone
 ```
 
-Client không được gửi position, damage, HP hoặc player ID làm nguồn sự thật. Server lấy identity từ authenticated connection. `sequence` giúp bỏ input cũ/trùng và chuẩn bị reconciliation; `serverTick` giúp interpolation về sau. Protocol binary v4 có record cho projectile và vũng bùn; snapshot lọc theo người xem để không phát tọa độ xe nấp bụi hoặc vật thể quá xa khi radar tắt. SignalR Hub chỉ route; `Game.Server` xử lý luật vũ khí và va chạm.
+Client không được gửi position, damage, HP hoặc player ID làm nguồn sự thật. Server lấy identity từ authenticated connection. `sequence`/`clientTick` bỏ input cũ/trùng; ACK và self state cho client replay, `serverTick` cho nội suy remote. Protocol binary v5 có record cho projectile và vũng bùn; snapshot lọc theo người xem để không phát tọa độ xe nấp bụi hoặc vật thể quá xa khi radar tắt. SignalR Hub chỉ route; `Game.Server` xử lý luật vũ khí và va chạm.
 
-## 6. Movement và render dự kiến
+## 6. Movement và render hiện tại
 
-Local player: lấy input → dự đoán movement ngay → lưu pending input `{sequence, dt, input}` → gửi server → nhận self state và `lastProcessedSequence` → đặt lại state theo server → phát lại input chưa được xác nhận → làm mượt sai khác nhỏ. Server luôn kiểm tra acceleration, max speed, collision, status và sequence; snapshot của server là nguồn sự thật. Teleport hợp lệ hoặc sai khác lớn áp dụng ngay.
+Local player: lấy input theo tick 30 Hz → lượng tử hóa như byte gửi đi → dự đoán movement và lưu pending `{sequence, clientTick, input}` → gửi server → nhận self state/vận tốc và `lastProcessedSequence` → đặt lại state theo server → phát lại input chưa ACK → làm mượt sai khác nhỏ. Server kiểm tra gia tốc, tốc độ tối đa, collision, status, sequence và clientTick; snapshot là nguồn sự thật. Chết/hồi sinh hoặc sai khác trên 100 unit áp dụng ngay. Client đo trễ ACK và độ sửa vị trí.
 
-Remote player: giữ buffer 2+ snapshot và render trễ khoảng 100 ms theo `serverTick`, nội suy vị trí/góc. Thiếu snapshot thì extrapolate ngắn, sau đó giữ vị trí. Spawn, death và teleport là event rời rạc, không nội suy xuyên qua.
+Remote player: giữ tối đa tám snapshot và render trễ ba tick (~100 ms) theo `serverTick`, nội suy vị trí/góc. Khi chưa có snapshot tiếp theo thì giữ vị trí cuối; xe bị ẩn/rời trận được xoá khỏi buffer. Death hoặc dịch chuyển hơn 100 unit áp dụng ngay.
 
-Phase 2 đã có `RealtimeClient`, `GameNetworkAdapter` và `ClientWorldState`; Phaser scene render world state trong match online. Phase 3 sẽ thêm prediction/reconciliation và interpolation.
+`PlayerMovementSystem.cs` và `Movement.ts` chứa cùng thông số/quy tắc movement ở hai phía; `Prediction.ts` và `Interpolation.ts` xử lý hình ảnh client. Cấu hình hình học nhà hiện được phản chiếu ở C# và TypeScript, chưa có một nguồn dữ liệu map sinh tự động; test thực tế về va nhà và sửa sai giúp phát hiện lệch quy tắc. `RealtimeClient`/`GameNetworkAdapter` giữ giao tiếp ngoài scene.
 
 ## 7. Weapon, damage, item, status
 

@@ -20,6 +20,7 @@ public sealed class MatchRuntime(string id)
     private readonly List<ImpactEvent> _impacts = [];
     private ushort _nextEntityId;
     private uint _tick;
+    public long RejectedInputs { get; private set; }
     public string Id { get; } = id;
     public int PlayerCount => _players.Count;
 
@@ -57,10 +58,16 @@ public sealed class MatchRuntime(string id)
     {
         if (!_players.TryGetValue(playerId, out var player) ||
             unchecked(input.Sequence - player.LastSequence) is 0 or >= 0x80000000 ||
+            unchecked(input.ClientTick - player.LastClientTick) is 0 or >= 0x80000000 ||
             !float.IsFinite(input.MoveX) || !float.IsFinite(input.MoveY) ||
             !float.IsFinite(input.AimAngle) || Math.Abs(input.MoveX) > 1 || Math.Abs(input.MoveY) > 1)
+        {
+            RejectedInputs++;
             return;
+        }
         player.LastSequence = input.Sequence;
+        player.LastClientTick = input.ClientTick;
+        player.LastInputAtTick = _tick;
         if (player.Health == 0) return;
         var length = MathF.Max(1, MathF.Sqrt(input.MoveX * input.MoveX + input.MoveY * input.MoveY));
         player.MoveX = input.MoveX / length;
@@ -139,21 +146,18 @@ public sealed class MatchRuntime(string id)
                 player.X = player.SpawnX;
                 player.Y = 640;
                 player.MoveX = player.MoveY = 0;
+                player.VelocityX = player.VelocityY = 0;
             }
             player.Status = (byte)(_mud.Any(hazard => DistanceSquared(player.X, player.Y, hazard.X, hazard.Y) <= 100 * 100) ? 1 : 0);
-            var speed = player.Status == 1 ? 126f : 280f;
-            var nextX = Math.Clamp(player.X + player.MoveX * (speed / 30f), 35, 3165);
-            var nextY = Math.Clamp(player.Y + player.MoveY * (speed / 30f), 35, 2165);
-            if (!Blocked(nextX, player.Y)) player.X = nextX;
-            if (!Blocked(player.X, nextY)) player.Y = nextY;
-            if (player.MoveX != 0 || player.MoveY != 0)
-                player.Rotation = MathF.Atan2(player.MoveY, player.MoveX);
+            if (unchecked(_tick - player.LastInputAtTick) > 6)
+                player.MoveX = player.MoveY = 0;
+            PlayerMovementSystem.Step(player, Buildings);
         }
         for (var i = _projectiles.Count - 1; i >= 0; i--)
             if (AdvanceProjectile(_projectiles[i])) _projectiles.RemoveAt(i);
-        return new Snapshot(GameProtocol.Version, Id, _tick,
+        return new Snapshot(GameProtocol.Version, Id, _tick, 0,
             _players.Values.Select(p => new PlayerState(p.NetworkId, p.Id, p.Username, p.X, p.Y,
-                p.Rotation, p.AimAngle, p.Health, p.Status)).ToArray(),
+                p.Rotation, p.AimAngle, p.Health, p.Status, p.VelocityX, p.VelocityY)).ToArray(),
             _projectiles.Select(p => new ProjectileState(p.Id, p.X, p.Y, p.Weapon,
                 p.FlightTicks == 0 ? (byte)0 : (byte)Math.Clamp(p.AgeTicks * 255 / p.FlightTicks, 0, 255))).ToArray(),
             _mud.Select(h => new HazardState(h.Id, h.X, h.Y,
@@ -252,6 +256,7 @@ public sealed class MatchRuntime(string id)
         player.Health = (byte)Math.Max(0, player.Health - amount);
         if (player.Health != 0) return;
         player.MoveX = player.MoveY = 0;
+        player.VelocityX = player.VelocityY = 0;
         player.RespawnAtTick = _tick + 90;
     }
 
@@ -283,7 +288,8 @@ public sealed class MatchRuntime(string id)
             var hazards = full.Hazards.Where(h => radar ||
                 DistanceSquared(h.X, h.Y, viewer.X, viewer.Y) <= 900 * 900).ToArray();
             views[index++] = new ViewerSnapshot(viewer.Id, full with
-            { Players = visible, Projectiles = projectiles, Hazards = hazards });
+            { LastProcessedSequence = viewer.LastSequence, Players = visible,
+              Projectiles = projectiles, Hazards = hazards });
         }
         return views;
     }
@@ -294,13 +300,6 @@ public sealed class MatchRuntime(string id)
         var dy = y - b.Y;
         return dx * dx + dy * dy < (b.R - 8) * (b.R - 8);
     });
-
-    private static bool Blocked(float x, float y)
-    {
-        foreach (var b in Buildings)
-            if (x > b.X - 28 && x < b.X + b.W + 28 && y > b.Y - 28 && y < b.Y + b.H + 28) return true;
-        return false;
-    }
 
     private static bool BlockedPoint(float x, float y)
     {
@@ -337,11 +336,13 @@ internal sealed class PlayerRuntime(ushort networkId, Guid id, string username, 
     public ushort NetworkId { get; } = networkId;
     public Guid Id { get; } = id;
     public string Username { get; } = username;
-    public float X = x, Y = y, Rotation, AimAngle, MoveX, MoveY;
+    public float X = x, Y = y, Rotation, AimAngle, MoveX, MoveY, VelocityX, VelocityY;
     public float SpawnX = x;
     public byte Health = 100;
     public byte Status;
     public uint LastSequence;
+    public uint LastClientTick;
+    public uint LastInputAtTick;
     public uint NextFireTick;
     public uint RespawnAtTick;
     public uint RadarUntilTick;

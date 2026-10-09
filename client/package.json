@@ -10,6 +10,9 @@
     "test:realtime": "node --experimental-strip-types tests/realtime.integration.mjs",
     "test:weapons": "node --experimental-strip-types tests/weapons.integration.mjs",
     "test:browser": "node --experimental-strip-types tests/browser.integration.mjs",
+    "test:layout": "node tests/layout.integration.mjs",
+    "test:movement": "node --experimental-strip-types tests/movement.integration.mjs",
+    "test:movement:server": "node --experimental-strip-types tests/movement.server.integration.mjs",
     "format": "prettier --write src vite.config.ts index.html",
     "format:check": "prettier --check src vite.config.ts index.html"
   },

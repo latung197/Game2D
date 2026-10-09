@@ -2,19 +2,20 @@ using System.Buffers.Binary;
 
 namespace Game.Shared.Contracts;
 
-// Version 4 uses little-endian integers and fixed-size records for players, projectiles and mud.
+// Version 5 adds client tick, per-viewer input acknowledgement and player velocity.
 public static class BinaryGameCodec
 {
     public static bool TryDecodeInput(ReadOnlySpan<byte> data, out InputBatch input)
     {
         input = default!;
         if (data.Length != GameProtocol.InputBytes || data[0] != GameProtocol.Version ||
-            data[1] != GameProtocol.InputKind || data[9] != 0) return false;
-        var x = unchecked((sbyte)data[6]);
-        var y = unchecked((sbyte)data[7]);
+            data[1] != GameProtocol.InputKind || data[13] != 0) return false;
+        var x = unchecked((sbyte)data[10]);
+        var y = unchecked((sbyte)data[11]);
         if (x == sbyte.MinValue || y == sbyte.MinValue) return false;
         input = new InputBatch(BinaryPrimitives.ReadUInt32LittleEndian(data[2..6]),
-            x / 127f, y / 127f, DecodeAngle(data[8]));
+            BinaryPrimitives.ReadUInt32LittleEndian(data[6..10]),
+            x / 127f, y / 127f, DecodeAngle(data[12]));
         return true;
     }
 
@@ -40,6 +41,7 @@ public static class BinaryGameCodec
         data[6] = (byte)snapshot.Players.Count;
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(7, 2), (ushort)snapshot.Projectiles.Count);
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(9, 2), (ushort)snapshot.Hazards.Count);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(11, 4), snapshot.LastProcessedSequence);
         for (var i = 0; i < snapshot.Players.Count; i++)
         {
             var player = snapshot.Players[i];
@@ -51,6 +53,8 @@ public static class BinaryGameCodec
             data[offset + 7] = EncodeAngle(player.AimAngle);
             data[offset + 8] = player.Health;
             data[offset + 9] = player.Status;
+            BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(offset + 10, 2), EncodeVelocity(player.VelocityX));
+            BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(offset + 12, 2), EncodeVelocity(player.VelocityY));
         }
         var projectileOffset = GameProtocol.SnapshotHeaderBytes + snapshot.Players.Count * GameProtocol.PlayerBytes;
         foreach (var projectile in snapshot.Projectiles)
@@ -131,7 +135,9 @@ public static class BinaryGameCodec
                 BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2)),
                 BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 2, 2)) / 16f,
                 BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 4, 2)) / 16f,
-                DecodeAngle(data[offset + 6]), DecodeAngle(data[offset + 7]), data[offset + 8], data[offset + 9]);
+                DecodeAngle(data[offset + 6]), DecodeAngle(data[offset + 7]), data[offset + 8], data[offset + 9],
+                BinaryPrimitives.ReadInt16LittleEndian(data.Slice(offset + 10, 2)),
+                BinaryPrimitives.ReadInt16LittleEndian(data.Slice(offset + 12, 2)));
         }
         var projectiles = new ProjectileState[projectileCount];
         var offsetAfterPlayers = GameProtocol.SnapshotHeaderBytes + players.Length * GameProtocol.PlayerBytes;
@@ -153,12 +159,16 @@ public static class BinaryGameCodec
                 BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 2, 2)) / 16f,
                 BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 4, 2)) / 16f, data[offset + 6]);
         }
-        snapshot = new CompactSnapshot(BinaryPrimitives.ReadUInt32LittleEndian(data[2..6]), players, projectiles, hazards);
+        snapshot = new CompactSnapshot(BinaryPrimitives.ReadUInt32LittleEndian(data[2..6]),
+            BinaryPrimitives.ReadUInt32LittleEndian(data[11..15]), players, projectiles, hazards);
         return true;
     }
 
     private static ushort EncodePosition(float value) =>
         (ushort)Math.Clamp((int)MathF.Round(value * 16), 0, ushort.MaxValue);
+
+    private static short EncodeVelocity(float value) =>
+        (short)Math.Clamp((int)MathF.Round(value), short.MinValue, short.MaxValue);
 
     private static byte EncodeAngle(float radians)
     {
@@ -169,6 +179,6 @@ public static class BinaryGameCodec
     private static float DecodeAngle(byte value) => value * (2 * MathF.PI / 256);
 }
 
-public sealed record CompactPlayerState(ushort NetworkId, float X, float Y, float Rotation, float AimAngle, byte Health, byte Status);
-public sealed record CompactSnapshot(uint ServerTick, IReadOnlyList<CompactPlayerState> Players,
+public sealed record CompactPlayerState(ushort NetworkId, float X, float Y, float Rotation, float AimAngle, byte Health, byte Status, float VelocityX, float VelocityY);
+public sealed record CompactSnapshot(uint ServerTick, uint LastProcessedSequence, IReadOnlyList<CompactPlayerState> Players,
     IReadOnlyList<ProjectileState> Projectiles, IReadOnlyList<HazardState> Hazards);

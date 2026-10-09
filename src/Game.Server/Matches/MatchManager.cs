@@ -18,6 +18,7 @@ public sealed class MatchManager(IGameEventPublisher publisher, ILogger<MatchMan
     private readonly Channel<ImpactEvent> _impacts = Channel.CreateBounded<ImpactEvent>(
         new BoundedChannelOptions(256) { SingleReader = true, FullMode = BoundedChannelFullMode.DropOldest });
     private readonly Dictionary<string, MatchRuntime> _matches = new() { [GameProtocol.DevelopmentMatch] = new MatchRuntime(GameProtocol.DevelopmentMatch) };
+    private long _droppedCommands;
 
     public async Task<JoinAccepted?> JoinAsync(Guid playerId, string username, CancellationToken cancellationToken)
     {
@@ -27,8 +28,18 @@ public sealed class MatchManager(IGameEventPublisher publisher, ILogger<MatchMan
     }
     public ValueTask LeaveAsync(Guid playerId, CancellationToken cancellationToken) =>
         _commands.Writer.WriteAsync(new LeaveCommand(playerId), cancellationToken);
-    public bool Input(Guid playerId, InputBatch input) => _commands.Writer.TryWrite(new InputCommand(playerId, input));
-    public bool Fire(Guid playerId, FireIntent intent) => _commands.Writer.TryWrite(new FireCommand(playerId, intent));
+    public bool Input(Guid playerId, InputBatch input)
+    {
+        if (_commands.Writer.TryWrite(new InputCommand(playerId, input))) return true;
+        Interlocked.Increment(ref _droppedCommands);
+        return false;
+    }
+    public bool Fire(Guid playerId, FireIntent intent)
+    {
+        if (_commands.Writer.TryWrite(new FireCommand(playerId, intent))) return true;
+        Interlocked.Increment(ref _droppedCommands);
+        return false;
+    }
     public async Task<RadarResult> UseRadarAsync(Guid playerId, CancellationToken cancellationToken)
     {
         var reply = new TaskCompletionSource<RadarResult>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -42,6 +53,8 @@ public sealed class MatchManager(IGameEventPublisher publisher, ILogger<MatchMan
         var shotBroadcast = BroadcastShotsAsync(stoppingToken);
         var impactBroadcast = BroadcastImpactsAsync(stoppingToken);
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1d / 30));
+        var tickDurationTotalMs = 0d;
+        var tickDurationMaximumMs = 0d;
         try
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
@@ -66,8 +79,17 @@ public sealed class MatchManager(IGameEventPublisher publisher, ILogger<MatchMan
                 if (snapshot.ServerTick % 3 == 0 && match.PlayerCount > 0)
                     _snapshots.Writer.TryWrite(match.VisibleSnapshots(snapshot));
                 var elapsed = Stopwatch.GetElapsedTime(started);
+                tickDurationTotalMs += elapsed.TotalMilliseconds;
+                tickDurationMaximumMs = Math.Max(tickDurationMaximumMs, elapsed.TotalMilliseconds);
                 if (elapsed > TimeSpan.FromMilliseconds(33))
                     logger.LogWarning("Match {MatchId} tick {Tick} took {DurationMs} ms", match.Id, snapshot.ServerTick, elapsed.TotalMilliseconds);
+                if (snapshot.ServerTick % 900 == 0)
+                {
+                    logger.LogInformation("Match {MatchId} tick {Tick}: avg {AverageMs:F2} ms, max {MaximumMs:F2} ms, dropped commands {Dropped}, rejected input {Rejected}",
+                        match.Id, snapshot.ServerTick, tickDurationTotalMs / 900, tickDurationMaximumMs,
+                        Interlocked.Read(ref _droppedCommands), match.RejectedInputs);
+                    tickDurationTotalMs = tickDurationMaximumMs = 0;
+                }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }

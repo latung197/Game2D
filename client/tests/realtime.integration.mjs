@@ -68,7 +68,7 @@ try {
     });
     await connection.start();
     const joined = await connection.invoke('JoinMatch');
-    assert.equal(Number(field(joined, 'ProtocolVersion', 'protocolVersion', 0)), 4);
+    assert.equal(Number(field(joined, 'ProtocolVersion', 'protocolVersion', 0)), 5);
     if (i === 1) {
       const roster = rosterOf(joined);
       playerIds = accounts.map((account) => {
@@ -124,11 +124,11 @@ try {
   assert.ok(shots[1][0].endX <= 3200);
 
   await connections[0].send('InputBatch', encodeInput(10, 0, 0, 0));
-  await new Promise((resolve) => setTimeout(resolve, 180));
+  await new Promise((resolve) => setTimeout(resolve, 350));
   const stoppedX = snapshots[1].players.find((p) => p.networkId === playerIds[0]).x;
   await connections[0].send('InputBatch', encodeInput(9, -1, 0, 0));
   const badAxis = encodeInput(11, 1, 0, 0);
-  badAxis[6] = 128;
+  badAxis[10] = 128;
   await connections[0].send('InputBatch', badAxis);
   await new Promise((resolve) => setTimeout(resolve, 200));
   assert.equal(snapshots[1].players.find((p) => p.networkId === playerIds[0]).x, stoppedX);
@@ -190,7 +190,7 @@ try {
   await reconnected.stop();
   await waitFor(() => snapshots[1]?.players.length === 1);
   console.log(
-    `PASS: v4 binary ${SNAPSHOT_HEADER_BYTES + PLAYER_BYTES * 2}-byte snapshots, 15-byte laser shots, damage/death/respawn, server stealth/radar, reconnect; ${(1000 / averageMs).toFixed(1)} snapshots/s`,
+    `PASS: v5 binary ${SNAPSHOT_HEADER_BYTES + PLAYER_BYTES * 2}-byte snapshots, 15-byte laser shots, damage/death/respawn, server stealth/radar, reconnect; ${(1000 / averageMs).toFixed(1)} snapshots/s`,
   );
 } finally {
   await Promise.all(connections.map((connection) => connection.stop()));

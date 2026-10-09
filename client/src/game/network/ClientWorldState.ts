@@ -5,6 +5,7 @@ export class ClientWorldState {
   private players = new Map<string, PlayerState>();
   private identities = new Map<number, PlayerIdentity>();
   serverTick = 0;
+  lastProcessedSequence = 0;
   projectiles: ProjectileState[] = [];
   hazards: HazardState[] = [];
 
@@ -12,6 +13,7 @@ export class ClientWorldState {
     this.identities = new Map(players.map((player) => [player.networkId, player]));
     this.players.clear();
     this.serverTick = 0;
+    this.lastProcessedSequence = 0;
     this.projectiles = [];
     this.hazards = [];
   }
@@ -30,6 +32,7 @@ export class ClientWorldState {
     const snapshot = decodeSnapshot(payload);
     if (!snapshot || snapshot.serverTick <= this.serverTick) return;
     this.serverTick = snapshot.serverTick;
+    this.lastProcessedSequence = snapshot.lastProcessedSequence;
     this.projectiles = snapshot.projectiles;
     this.hazards = snapshot.hazards;
     const next = new Map<string, PlayerState>();
@@ -52,6 +55,7 @@ export class ClientWorldState {
     this.players.clear();
     this.identities.clear();
     this.serverTick = 0;
+    this.lastProcessedSequence = 0;
     this.projectiles = [];
     this.hazards = [];
   }

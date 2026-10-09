@@ -46,7 +46,7 @@ export function App(): React.JSX.Element {
 
   const playing = Boolean(session || preview);
   return (
-    <div className="app-shell">
+    <div className={`app-shell${playing ? ' is-playing' : ''}`}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-icon">✦</span>

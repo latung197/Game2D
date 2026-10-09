@@ -21,6 +21,8 @@ export type PlayerState = PlayerIdentity & {
   aimAngle: number;
   health: number;
   status: number;
+  velocityX: number;
+  velocityY: number;
 };
 
 type MessagePackIdentity = {
@@ -97,10 +99,16 @@ export class RealtimeClient {
     this.onStatus('Đã vào trận thử online.');
   }
 
-  sendInput(sequence: number, moveX: number, moveY: number, aimAngle: number): void {
+  sendInput(
+    sequence: number,
+    clientTick: number,
+    moveX: number,
+    moveY: number,
+    aimAngle: number,
+  ): void {
     if (this.connection.state !== 'Connected') return;
     void this.connection
-      .send('InputBatch', encodeInput(sequence, moveX, moveY, aimAngle))
+      .send('InputBatch', encodeInput(sequence, moveX, moveY, aimAngle, clientTick))
       .catch(() => this.onStatus('Không gửi được input.'));
   }
 

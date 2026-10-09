@@ -42,7 +42,7 @@ try {
     });
     await connection.start();
     const joined = await connection.invoke('JoinMatch');
-    assert.equal(Number(field(joined, 'ProtocolVersion', 'protocolVersion', 0)), 4);
+    assert.equal(Number(field(joined, 'ProtocolVersion', 'protocolVersion', 0)), 5);
     if (i === 1) {
       const roster = field(joined, 'Players', 'players', 3);
       ids = accounts.map((account) => Number(field(
@@ -86,20 +86,26 @@ try {
   await waitFor(() => latest[1]?.hazards.length > 0 &&
     latest[1]?.players.find((p) => p.networkId === ids[1])?.status === 1);
   const beforeSlow = latest[1].players.find((p) => p.networkId === ids[1]).x;
-  await connections[1].send('InputBatch', encodeInput(1, 1, 0, 0));
-  await sleep(400);
-  await connections[1].send('InputBatch', encodeInput(2, 0, 0, 0));
+  for (let sequence = 1; sequence <= 8; sequence++) {
+    await connections[1].send('InputBatch', encodeInput(sequence, 1, 0, 0));
+    await sleep(50);
+  }
+  const slowSpeed = latest[1].players.find((p) => p.networkId === ids[1]).velocityX;
+  await connections[1].send('InputBatch', encodeInput(9, 0, 0, 0));
   await sleep(120);
   const afterSlow = latest[1].players.find((p) => p.networkId === ids[1]).x;
   assert.ok(afterSlow - beforeSlow < 80 && afterSlow - beforeSlow > 15);
   await waitFor(() => latest[1]?.hazards.length === 0 &&
     latest[1]?.players.find((p) => p.networkId === ids[1])?.status === 0, 5000);
-  await connections[1].send('InputBatch', encodeInput(3, 1, 0, 0));
-  await sleep(420);
-  await connections[1].send('InputBatch', encodeInput(4, 0, 0, 0));
+  for (let sequence = 10; sequence <= 18; sequence++) {
+    await connections[1].send('InputBatch', encodeInput(sequence, 1, 0, 0));
+    await sleep(50);
+  }
+  const normalSpeed = latest[1].players.find((p) => p.networkId === ids[1]).velocityX;
+  await connections[1].send('InputBatch', encodeInput(19, 0, 0, 0));
   await sleep(120);
   const afterNormal = latest[1].players.find((p) => p.networkId === ids[1]).x;
-  assert.ok(afterNormal - afterSlow > 80);
+  assert.ok(normalSpeed > slowSpeed + 60 && afterNormal > afterSlow);
   console.log('PASS: bullet trajectory, rocket splash, artillery arc, mud puddle/slow, impact binary and server damage');
 } finally {
   await Promise.all(connections.map((connection) => connection.stop()));
