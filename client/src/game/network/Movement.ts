@@ -71,3 +71,21 @@ export function stepMovement(state: MovementState, input: MovementInput): Moveme
   }
   return { ...state, x, y, velocityX, velocityY, rotation, aimAngle: input.aimAngle };
 }
+
+export function interpolateMovement(
+  previous: MovementState,
+  current: MovementState,
+  alpha: number,
+): MovementState {
+  const fraction = Math.max(0, Math.min(1, alpha));
+  const angle = Math.atan2(
+    Math.sin(current.rotation - previous.rotation),
+    Math.cos(current.rotation - previous.rotation),
+  );
+  return {
+    ...current,
+    x: previous.x + (current.x - previous.x) * fraction,
+    y: previous.y + (current.y - previous.y) * fraction,
+    rotation: previous.rotation + angle * fraction,
+  };
+}

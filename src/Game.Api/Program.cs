@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using Game.Api.Authentication;
+using Game.Api.Rooms;
 using Game.Application.Accounts;
 using Game.Infrastructure.Persistence;
 using Game.Application.Abstractions;
@@ -30,6 +31,7 @@ if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
 
 builder.Services.AddDbContext<GameDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddScoped<IAccountRepository, EfAccountRepository>();
+builder.Services.AddScoped<IMatchResultStore, EfMatchResultStore>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddSingleton<IAccessTokenIssuer, JwtTokenIssuer>();
 builder.Services.AddSignalR(options =>
@@ -41,6 +43,7 @@ builder.Services.AddSingleton<ConnectionRegistry>();
 builder.Services.AddSingleton<IGameEventPublisher, SignalRGameEventPublisher>();
 builder.Services.AddSingleton<MatchManager>();
 builder.Services.AddSingleton<IMatchCommandGateway>(sp => sp.GetRequiredService<MatchManager>());
+builder.Services.AddSingleton<IRoomGateway>(sp => sp.GetRequiredService<MatchManager>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MatchManager>());
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
@@ -95,6 +98,15 @@ app.UseRateLimiter();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapHub<GameHub>("/hubs/game");
+RoomEndpoints.Map(app);
+app.MapGet("/api/matches/{matchId}", async (string matchId, ClaimsPrincipal principal,
+    IMatchResultStore results, CancellationToken ct) =>
+{
+    if (!Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var playerId))
+        return Results.Unauthorized();
+    var result = await results.GetForPlayerAsync(matchId, playerId, ct);
+    return result is null ? Results.NotFound() : Results.Ok(result);
+}).RequireAuthorization();
 app.MapPost("/api/auth/register", async (Credentials input, AuthService auth, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(input.Username) || string.IsNullOrEmpty(input.Password))

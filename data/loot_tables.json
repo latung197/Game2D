@@ -1,0 +1,18 @@
+[
+  { "id": 1, "kind": "HealthKit", "x": 1150, "y": 640 },
+  { "id": 2, "kind": "HealthKit", "x": 1600, "y": 640 },
+  { "id": 3, "kind": "HealthKit", "x": 2260, "y": 640 },
+  { "id": 4, "kind": "HealthKit", "x": 690, "y": 1380 },
+  { "id": 5, "kind": "HealthKit", "x": 2010, "y": 1380 },
+  { "id": 6, "kind": "HealthKit", "x": 2850, "y": 1780 },
+  { "id": 7, "kind": "RadarCell", "x": 2300, "y": 640 },
+  { "id": 8, "kind": "AmmoCrate", "x": 1380, "y": 640 },
+  { "id": 9, "kind": "RadarCell", "x": 3460, "y": 590 },
+  { "id": 10, "kind": "AmmoCrate", "x": 3740, "y": 1220 },
+  { "id": 11, "kind": "HealthKit", "x": 3520, "y": 2000 },
+  { "id": 12, "kind": "HealthKit", "x": 560, "y": 2660 },
+  { "id": 13, "kind": "RadarCell", "x": 1790, "y": 2630 },
+  { "id": 14, "kind": "AmmoCrate", "x": 3000, "y": 2670 },
+  { "id": 15, "kind": "AmmoCrate", "x": 3650, "y": 2570 },
+  { "id": 16, "kind": "HealthKit", "x": 2390, "y": 2390 }
+]

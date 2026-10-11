@@ -29,8 +29,8 @@ connection.on('Snapshot', (payload) => {
 });
 try {
   await connection.start();
-  const joined = await connection.invoke('JoinMatch');
-  assert.equal(Number(joined.ProtocolVersion ?? joined.protocolVersion ?? joined[0]), 5);
+  const joined = await connection.invoke('JoinMatch', 'development');
+  assert.equal(Number(joined.ProtocolVersion ?? joined.protocolVersion ?? joined[0]), 6);
   await waitFor(() => snapshots.length > 0);
   const id = snapshots.at(-1).players[0].networkId;
   const own = () => snapshots.at(-1).players.find((player) => player.networkId === id);

@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 const INPUT_KIND = 1;
 const SNAPSHOT_KIND = 2;
 export const INPUT_BYTES = 14;
@@ -6,7 +6,17 @@ export const SNAPSHOT_HEADER_BYTES = 15;
 export const PLAYER_BYTES = 14;
 export const PROJECTILE_BYTES = 8;
 export const HAZARD_BYTES = 7;
-export const WeaponKind = { Bullet: 1, Laser: 2, Rocket: 3, Artillery: 4, Mud: 5 } as const;
+export const WeaponKind = {
+  Bullet: 1,
+  Laser: 2,
+  Rocket: 3,
+  Artillery: 4,
+  Mud: 5,
+  Burst: 6,
+  Sniper: 7,
+  Grenade: 8,
+  Pulse: 9,
+} as const;
 export type WeaponKind = (typeof WeaponKind)[keyof typeof WeaponKind];
 const TWO_PI = Math.PI * 2;
 
@@ -53,6 +63,7 @@ export type ShotTrace = {
   shooterNetworkId: number;
   hitNetworkId: number;
   targetHealth: number;
+  weapon: WeaponKind;
 };
 export type RadarResult = { activeTicks: number; cooldownTicks: number };
 
@@ -72,7 +83,7 @@ export function decodeImpact(payload: Uint8Array | ArrayBuffer): ImpactEvent | n
     bytes[0] !== PROTOCOL_VERSION ||
     bytes[1] !== 6 ||
     bytes[8] < 1 ||
-    bytes[8] > 5 ||
+    bytes[8] > 9 ||
     bytes[11] > 100
   )
     return null;
@@ -96,7 +107,14 @@ export function decodeRadar(payload: Uint8Array | ArrayBuffer): RadarResult | nu
 
 export function decodeShot(payload: Uint8Array | ArrayBuffer): ShotTrace | null {
   const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
-  if (bytes.byteLength !== 15 || bytes[0] !== PROTOCOL_VERSION || bytes[1] !== 3) return null;
+  if (
+    bytes.byteLength !== 16 ||
+    bytes[0] !== PROTOCOL_VERSION ||
+    bytes[1] !== 3 ||
+    bytes[15] < 1 ||
+    bytes[15] > 9
+  )
+    return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   return {
     startX: view.getUint16(2, true) / 16,
@@ -106,6 +124,7 @@ export function decodeShot(payload: Uint8Array | ArrayBuffer): ShotTrace | null 
     shooterNetworkId: view.getUint16(10, true),
     hitNetworkId: view.getUint16(12, true),
     targetHealth: view.getUint8(14),
+    weapon: bytes[15] as WeaponKind,
   };
 }
 
@@ -166,7 +185,7 @@ export function decodeSnapshot(payload: Uint8Array | ArrayBuffer): CompactSnapsh
   for (let i = 0; i < projectileCount; i++) {
     const offset = projectileStart + i * PROJECTILE_BYTES;
     const weapon = view.getUint8(offset + 6);
-    if (weapon < 1 || weapon > 5) return null;
+    if (weapon < 1 || weapon > 9) return null;
     projectiles.push({
       id: view.getUint16(offset, true),
       x: view.getUint16(offset + 2, true) / 16,

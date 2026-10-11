@@ -1,6 +1,6 @@
 # Cài đặt và chạy Scrap Street trên máy mới
 
-Tài liệu này mô tả trạng thái **Phase 2**. Game lái thử chạy offline trong trình duyệt; sau đăng nhập, client kết nối vào development match qua SignalR. API đăng ký/đăng nhập và trận online cần PostgreSQL để API khởi động. Redis có trong `compose.yaml` nhưng chưa được code sử dụng.
+Tài liệu này mô tả cách chạy bản hiện tại: khám phá/tập bắn offline, phòng online 5–50 người qua SignalR, bo và túi đồ. API đăng ký/đăng nhập, trận online và lưu lịch sử cần PostgreSQL để khởi động. Redis có trong `compose.yaml` nhưng code gameplay chưa dùng. Luật/map và giới hạn ở [GAMEPLAY.md](GAMEPLAY.md).
 
 ## 1. Phần mềm cần có
 
@@ -16,7 +16,7 @@ Tài liệu này mô tả trạng thái **Phase 2**. Game lái thử chạy offl
 
 ## 2. Lấy source và kiểm tra
 
-Sao chép toàn bộ thư mục dự án, bao gồm `Game.sln`, `src`, `client`, `compose.yaml`, `client/package-lock.json` và `docs`. Không cần sao chép `node_modules`, `bin`, `obj`, `client/dist`, `.keys`, `.runtime-*` hoặc ảnh chụp thử nghiệm. Các thư mục này được tạo lại khi chạy.
+Sao chép toàn bộ thư mục dự án, bao gồm `Game.sln`, `src`, `client`, `data`, `tests`, `compose.yaml`, `client/package-lock.json` và `docs`. Không cần sao chép `node_modules`, `bin`, `obj`, `client/dist`, `.keys`, `.runtime-*` hoặc ảnh chụp thử nghiệm. Các thư mục này được tạo lại khi chạy.
 
 Từ thư mục gốc:
 
@@ -83,14 +83,16 @@ Nếu máy đã có PostgreSQL chiếm cổng 5432, chọn cách **3A** hoặc b
 
 1. `http://127.0.0.1:5080/health` trả `{ "status": "ok" }`.
 2. Trang `http://127.0.0.1:5173/` hiển thị landing page.
-3. Bấm **Lái thử offline**; xe xuất hiện ở giữa map. WASD/phím mũi tên di chuyển, chuột xoay hướng súng, camera theo xe, nhà chặn đường. Đây là chuyển động client offline, chưa có combat.
+3. Chọn **Khám phá tự do** hoặc **Tập bắn** offline. WASD/phím mũi tên di chuyển, chuột ngắm và click bắn, camera theo xe, nhà chặn đường. Tập bắn có năm mục tiêu client; không lưu kết quả lên server.
 4. Đăng ký một tài khoản mới: username 3–24 ký tự ASCII gồm chữ/số/gạch dưới; mật khẩu 12–128 ký tự. Đăng xuất và đăng nhập lại. API lưu user trong bảng `users`.
 5. Đăng nhập sai mật khẩu trả HTTP 401; đăng ký username trùng trả HTTP 409; `/api/me` chỉ trả dữ liệu khi có bearer token hợp lệ.
-6. Đăng nhập hai tài khoản trong hai tab/trình duyệt, cả hai sẽ vào trận thử online. Mỗi tab thấy hai xe và vị trí di chuyển của nhau. Ngắt một tab thì xe đó biến mất khỏi tab còn lại.
+6. Đăng nhập hai tài khoản trong hai tab/trình duyệt. Tài khoản đầu tạo phòng, chọn sức chứa 5/10/20/25/50; tài khoản sau vào từ danh sách hoặc mã; host bấm bắt đầu. Có thể dùng ghép nhanh 10 người. Dùng phím 1–9 đổi vũ khí hoặc vuốt thanh súng trên điện thoại; nút `i` hiển thị sát thương và thuộc tính. R nạp, E nhặt item vào túi, Q/T/G dùng cứu thương/pin radar/hộp đạn, N chọn sáng/tối, L bật đèn pha để soi bụi. Bắn hạ xe kia để thử bảng kết quả và nút về sảnh; kết quả đã lưu đọc được bằng `GET /api/matches/{id}` với JWT của người tham gia. Ngắt một tab khi trận đang chơi giữ chỗ kết nối lại 30 giây.
 
-Kiểm thử tích hợp tự động khi API đang chạy: `cd client`, `npm run test:realtime`. Kiểm thử trình duyệt bằng `npm run test:browser` cần Edge/Chrome chạy CDP tại `127.0.0.1:9224` và Vite tại `127.0.0.1:5173`. Node 22 được dùng cho hai script test vì hỗ trợ `--experimental-strip-types`; tính năng game trên trình duyệt không phụ thuộc cờ Node này.
+Kiểm thử tích hợp tự động khi API đang chạy: `cd client`, lần lượt chạy `npm run test:match`, `npm run test:rooms`, `npm run test:realtime`, `npm run test:weapons`, `npm run test:loot`, `npm run test:movement:server`. `npm run test:match:store` cần PostgreSQL và kiểm tra kết quả ghi trùng không cộng thống kê hai lần; probe tự xóa dữ liệu thử của chính nó. Chạy `npm run test:movement:conformance` và `npm run test:rooms:rules` để tự build các probe .NET. Không chạy song song các bài dùng trận `development` vì chúng chia sẻ runtime. Kiểm thử trình duyệt bằng `npm run test:browser` cần Edge/Chrome chạy CDP tại `127.0.0.1:9224` và Vite tại `127.0.0.1:5173`; bài này thử tạo/vào/bắt đầu phòng và độ trễ giả lập 50, 80, 100 ms. Node 22 dùng cho các script test vì hỗ trợ `--experimental-strip-types`.
 
 Tài khoản `demo` được tạo trong database **trên máy phát triển ban đầu**, không nằm trong source/migration. Máy mới cần tự đăng ký tài khoản.
+
+API tự áp dụng migration `InitialAuth` và `202610110001_MatchResults` khi khởi động. Migration thứ hai tạo `match_history`, `match_players`, `player_statistics`; role PostgreSQL cần quyền tạo bảng. Không cần chạy SQL thủ công. `data/map.json`, `data/weapons.json`, `data/items.json`, `data/loot_tables.json`, `data/game_rules.json` được nhúng vào `Game.Server` lúc build; sau khi đổi các file này phải build/chạy lại API. Luật bo chi tiết ở [MATCHES.md](MATCHES.md).
 
 ## 5. Cấu hình và lưu ý vận hành
 

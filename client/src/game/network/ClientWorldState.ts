@@ -1,4 +1,10 @@
-import type { PlayerIdentity, PlayerState } from '../../services/realtime/RealtimeClient';
+import type {
+  PlayerIdentity,
+  PlayerState,
+  ItemSnapshot,
+  WorldItem,
+  ZoneState,
+} from '../../services/realtime/RealtimeClient';
 import { decodeSnapshot, type ProjectileState, type HazardState } from './BinaryGameCodec';
 
 export class ClientWorldState {
@@ -8,6 +14,15 @@ export class ClientWorldState {
   lastProcessedSequence = 0;
   projectiles: ProjectileState[] = [];
   hazards: HazardState[] = [];
+  items: WorldItem[] = [];
+  itemRevision = 0;
+  zone: ZoneState | null = null;
+
+  setItems(snapshot: ItemSnapshot): void {
+    if (snapshot.revision < this.itemRevision) return;
+    this.itemRevision = snapshot.revision;
+    this.items = snapshot.items;
+  }
 
   setRoster(players: PlayerIdentity[]): void {
     this.identities = new Map(players.map((player) => [player.networkId, player]));
@@ -58,5 +73,8 @@ export class ClientWorldState {
     this.lastProcessedSequence = 0;
     this.projectiles = [];
     this.hazards = [];
+    this.items = [];
+    this.itemRevision = 0;
+    this.zone = null;
   }
 }

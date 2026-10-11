@@ -23,7 +23,7 @@ public static class BinaryGameCodec
     {
         intent = default!;
         if (data.Length != 5 || data[0] != GameProtocol.Version || data[1] != 5 ||
-            data[2] is < 1 or > 5) return false;
+            data[2] is < 1 or > 9) return false;
         intent = new FireIntent((WeaponKind)data[2], BinaryPrimitives.ReadUInt16LittleEndian(data[3..5]));
         return true;
     }
@@ -93,7 +93,7 @@ public static class BinaryGameCodec
 
     public static byte[] EncodeShot(ShotTrace shot)
     {
-        var data = new byte[15];
+        var data = new byte[16];
         data[0] = GameProtocol.Version;
         data[1] = 3;
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(2, 2), EncodePosition(shot.StartX));
@@ -103,6 +103,7 @@ public static class BinaryGameCodec
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(10, 2), shot.ShooterNetworkId);
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(12, 2), shot.HitNetworkId);
         data[14] = shot.TargetHealth;
+        data[15] = (byte)shot.Weapon;
         return data;
     }
 
@@ -144,7 +145,7 @@ public static class BinaryGameCodec
         for (var i = 0; i < projectileCount; i++)
         {
             var offset = offsetAfterPlayers + i * GameProtocol.ProjectileBytes;
-            if (data[offset + 6] is < 1 or > 5) return false;
+            if (data[offset + 6] is < 1 or > 9) return false;
             projectiles[i] = new ProjectileState(BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2)),
                 BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 2, 2)) / 16f,
                 BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 4, 2)) / 16f,

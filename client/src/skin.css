@@ -1,0 +1,78 @@
+@font-face {
+  font-family: 'Kenney Future';
+  src: url('/assets/ui/kenney-future.ttf') format('truetype');
+  font-display: swap;
+}
+
+:root {
+  --skin-yellow: url('/assets/ui/button-yellow.png');
+  --skin-grey: url('/assets/ui/button-grey.png');
+  --skin-square-yellow: url('/assets/ui/button-square-yellow.png');
+  --skin-square-grey: url('/assets/ui/button-square-grey.png');
+  --skin-round-yellow: url('/assets/ui/button-round-yellow.png');
+  --skin-round-grey: url('/assets/ui/button-round-grey.png');
+}
+
+.brand {
+  font-family: 'Kenney Future', 'Space Grotesk', sans-serif;
+}
+
+.primary-button,
+.submit-button,
+.radar-button {
+  background: transparent var(--skin-yellow) center / 100% 100% no-repeat;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: #263747;
+  font-family: 'DM Sans', sans-serif;
+  filter: drop-shadow(2px 4px 0 #27374766);
+}
+
+.practice-button,
+.leave-button,
+.light-buttons button {
+  background: transparent var(--skin-grey) center / 100% 100% no-repeat;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: #263747;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.practice-button:hover,
+.light-buttons button:hover {
+  background: transparent var(--skin-grey) center / 100% 100% no-repeat;
+  filter: brightness(1.08);
+}
+
+.weapon-option {
+  background: transparent var(--skin-square-grey) center / 100% 100% no-repeat;
+  border: 0;
+  border-radius: 0;
+  color: #273747;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.weapon-option.selected {
+  background: transparent var(--skin-square-yellow) center / 100% 100% no-repeat;
+  color: #263747;
+}
+
+.fire-button,
+.touch-stick .stick-knob {
+  background: transparent var(--skin-round-yellow) center / 100% 100% no-repeat;
+  border: 0;
+  box-shadow: none;
+  color: #263747;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.aim-stick .stick-knob {
+  background-image: var(--skin-round-grey);
+}
+
+button:focus-visible {
+  outline: 3px solid #93d6dc;
+  outline-offset: 3px;
+}

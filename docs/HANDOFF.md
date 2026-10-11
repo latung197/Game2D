@@ -1,39 +1,35 @@
 # Bàn giao Scrap Street
 
-**Cập nhật:** 2026-10-09. Phase 2 realtime và bản thử Phase 3 movement mượt đã hoạt động; có combat năm loại đạn và radar. Room/loot/bo vẫn thuộc các phase sau.
+Cập nhật 2026-10-11. Code hiện có hai chế độ offline, phòng online 5/10/20/25/50, map 4000×3000, chín súng với bảng chỉ số, bụi ẩn nấp, đèn pha phát hiện mục tiêu, radar, túi đồ ba loại, bo năm phase, bảng kết quả và PostgreSQL. Xe mới vào phòng được đặt xa nhau hơn; nổ của bản thân không trừ máu. Chi tiết chức năng ở [IMPLEMENTED.md](IMPLEMENTED.md) và luật ở [GAMEPLAY.md](GAMEPLAY.md).
 
-## Trạng thái
+## Chạy từ checkout
 
-- Backend .NET 10: `Game.Api` host REST auth/SignalR, `Game.Infrastructure` lưu account bằng PostgreSQL, `Game.Server` giữ trận trong memory, `Game.Shared` chứa codec. `Game.Domain` còn là khung.
-- Client React/Vite/Phaser: auth, lái thử offline, match online cố định tối đa 10 người, map 3200×2200, minimap/radar, điều khiển desktop và chạm, thanh chọn năm vũ khí. Bố cục trong trận đã thu gọn cho điện thoại dọc/ngang; dùng gần hết viewport, thanh đạn ở trái khi xoay ngang.
-- SignalR MessagePack bọc payload gameplay binary v5. Input 14 byte gồm sequence/clientTick, Fire 5 byte, snapshot `15 + 14P + 8J + 7H` byte với ACK và vận tốc; laser 15 byte, impact 12 byte, radar 6 byte. Xem [PROTOCOL.md](PROTOCOL.md).
-- Match tick 30 Hz, snapshot khoảng 10 Hz. Server quyết định gia tốc/va nhà, đường đạn, điểm rơi, damage/HP, hiệu ứng bùn và radar. Client dự đoán self và replay input chưa ACK, nội suy xe khác trễ ba tick. Log tick trung bình/cao nhất và input bị bỏ; client giữ số đo trễ ACK/độ sửa vị trí.
-- Chưa có ammo/reload, loot, bo, room browser, nhiều match cùng lúc hoặc Redis integration. Chưa kiểm thử trên mạng di động/Wi-Fi thật ở 50–100 ms, tải 50 người/trận hoặc 10.000 người online.
+1. Cài .NET 10 SDK, Node 22 và PostgreSQL. Làm theo [SETUP.md](SETUP.md) để tạo role/database và cấu hình connection string/JWT.
+2. Ở gốc repo chạy `dotnet restore Game.sln`, sau đó `dotnet run --project src/Game.Api --urls http://127.0.0.1:5080`.
+3. Terminal khác chạy `cd client`, `npm ci`, `npm run dev`. Mở `http://127.0.0.1:5173/`.
+4. Đăng ký hai tài khoản, tạo phòng và chọn sức chứa, cho tài khoản còn lại vào, host bắt đầu. Có thể dùng ghép nhanh 10 người. Dùng 1–9 đổi súng, `i` xem chỉ số, R nạp, E nhặt, Q/T/G dùng item, N đổi ngày/đêm, L bật đèn pha.
 
-## Chạy
+API tự áp migration khi khởi động. PostgreSQL giữ tài khoản, lịch sử trận và thống kê; Redis trong Compose chưa được nối vào runtime. Nếu API không kết nối được DB thì không khởi động; kiểm tra connection string/quyền. Frontend dev cần API cổng 5080 cho proxy `/api` và `/hubs`.
 
-Làm theo [SETUP.md](SETUP.md) để cấu hình PostgreSQL. Tại thư mục gốc:
-
-```powershell
-dotnet restore Game.sln
-dotnet build Game.sln
-dotnet run --project src/Game.Api --urls http://127.0.0.1:5080
-```
-
-Terminal khác:
+## Xác minh
 
 ```powershell
+dotnet build Game.sln --no-restore
+dotnet run --no-restore --project tests/Game.RoomProbe/Game.RoomProbe.csproj
 cd client
-npm ci
-npm run dev -- --host 0.0.0.0
+npm run build
+npm run format:check
+npm run test:movement
 ```
 
-Mở `http://127.0.0.1:5173/` hoặc IP Wi-Fi của máy ở cổng 5173. Đăng nhập hai account ở hai tab để thử combat online. Chọn vũ khí bằng phím 1–5 hoặc thanh nút; pháo có slider tầm. Chuột hoặc cần phải để ngắm; click hoặc nút Bắn để khai hỏa.
+Khi API và Vite đang chạy, chạy lần lượt `npm run test:loot`, `test:rooms`, `test:match`, `test:weapons`, `test:realtime`, `test:browser`. Đừng chạy cùng lúc các bài dùng trận `development`; auth rate limit cũng có thể trả 429 khi đăng ký nhiều tài khoản trong cùng một phút. `test:layout` cần Edge/Chrome headless với CDP ở cổng 9224. Sau cập nhật chín vũ khí, đã chạy thành công build, room probe, loot, rooms, match, weapons, realtime, movement server, browser và layout; browser kiểm tra hai xe đứng yên đầu trận giữ 100 HP và UI điện thoại hiển thị bảng chỉ số.
 
-## Kiểm tra
+Đợt sửa giật màn phòng: `MapRenderer` bake map thành texture lúc tạo scene, chọn tỉ lệ texture theo giới hạn GPU; `Interpolation` không tua lùi thời gian trình bày khi gói đến trễ; `Prediction` làm tan sai lệch nhỏ trong 120 ms; nhãn xe chỉ đổi texture khi chữ thay đổi. Bài `test:browser` in p50/p95 frame 390×844. Trên Edge headless tại máy này, trước bake map là 50/66,7 ms, sau bake là 16,7/16,8 ms. Nếu máy thật vẫn lag, ghi loại máy, trình duyệt, FPS và lỗi console; kiểm tra `MAX_TEXTURE_SIZE`, WebGL/Canvas, snapshot rate và long tasks trước khi đổi hạ tầng.
 
-Sau khi API đang chạy: `dotnet build Game.sln --no-restore`; trong `client` chạy `npm run build`, `npm run format:check`, `npm run test:realtime`, `npm run test:movement`, `npm run test:movement:server`, `npm run test:weapons`. Bài `npm run test:browser` cần Vite và Edge CDP tại cổng 9224; có giả lập trễ 80 ms. Bài `npm run test:layout` chỉ cần Vite và Edge CDP, kiểm tra 320×568, 390×844, 844×390 và PC 1366×768. Test browser giả lập kích thước/chạm, chưa xác nhận trên thiết bị thật.
+Kiểm tra lại đã ép WebGL báo `MAX_TEXTURE_SIZE=2048` trong browser test: map raster ở nửa độ phân giải vẫn hiển thị đủ trên điện thoại. Test nay bắt mọi `Runtime.exceptionThrown`; nó phát hiện Phaser thử thao tác trên `AudioContext` đã đóng khi reload scene. Vì game hiện không dùng âm thanh, cấu hình `audio.noAudio` loại bỏ lỗi này; chạy lại browser test không còn exception. Bài realtime có một lần HTTP 429 do tạo tài khoản thử liên tục, chạy lại sau cửa sổ rate limit đã qua và đạt 10,1 snapshot/giây.
 
-## Việc tiếp theo
+## Ranh giới vận hành
 
-Theo [PHASES.md](PHASES.md), bước tiếp theo là room lifecycle/nhiều match độc lập, rồi ammo/reload, luật kill/score và item. Trước khi nâng lên 50 người/trận hoặc 10.000 online, đo tải và thiết kế nhiều match/process; Redis chỉ cần khi nhiều instance phải chia sẻ thông tin phù hợp, không đặt từng tick di chuyển qua Redis.
+Một process giữ room, match, reconnect state và queue ghi kết quả. Khi process restart, trận đang chơi mất. 50 slot/phòng và tọa độ hợp lệ đã có nhưng chưa đo FPS, packet drop, p95 tick hoặc mạng di động với 50 máy. Không coi sức chứa 50 là cam kết tải production. Scale nhiều instance cần owner cho từng room, routing và backplane/session affinity; không đẩy movement từng tick vào Redis. Kết quả chưa ghi DB cần durable outbox nếu không được phép mất khi crash.
+
+Các file chính: `data/map.json`, `data/game_rules.json`, `data/items.json`, `data/loot_tables.json`, `data/weapons.json`; server ở `src/Game.Server`, API ở `src/Game.Api`, Hub ở `src/Game.Realtime`, client ở `client/src/game` và `client/src/ui`. Hợp đồng mạng ở [PROTOCOL.md](PROTOCOL.md), API phòng ở [ROOMS.md](ROOMS.md), hướng kiến trúc ở [ARCHITECTURE.md](ARCHITECTURE.md).

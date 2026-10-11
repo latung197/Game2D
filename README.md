@@ -1,26 +1,10 @@
 # Scrap Street
 
-Game 2D top-down về những chiếc xe tự chế trong khu phố hoạt hình. Mục tiêu là multiplayer realtime ổn định, server authoritative và kiến trúc có thể phát triển từ vertical slice 10 người lên nhiều room và 50 người/room sau khi kiểm thử tải.
+Game đấu xe 2D nhìn từ trên xuống, viết bằng .NET 10, React, Phaser và PostgreSQL. Có khám phá/tập bắn offline, phòng online 5/10/20/25/50 người, năm loại vũ khí, map 4000 × 3000, bụi ẩn nấp, đèn pha phát hiện đối thủ, radar, túi đồ ba loại và bo năm giai đoạn. Server quyết định di chuyển, va chạm, sát thương, loot, bo và kết quả; client dự đoán di chuyển để lái mượt.
 
-## Trạng thái dự án
+## Chạy nhanh
 
-**Phase 2 và bản thử Phase 3 đã triển khai (2026-10-09):** Có API đăng ký/đăng nhập JWT, lái thử offline và trận online SignalR/WebSocket MessagePack. Payload binary v5: input 14 byte, Fire 5 byte, snapshot `15 + 14 × số xe + 8 × số đạn + 7 × số vũng bùn` byte. Server tick 30 Hz, gửi snapshot khoảng 10 Hz, quyết định gia tốc, va chạm, HP và đường đạn. Client dự đoán xe mình, sửa sai theo ACK và nội suy xe khác. Có năm vũ khí: đạn xa, laser, tên lửa, pháo và bùn. Bản đồ 3200×2200 có minimap, radar và điều khiển chạm. Chưa có ammo, room browser hoặc gameplay hoàn chỉnh. Xem [IMPLEMENTED.md](docs/IMPLEMENTED.md) và [PROTOCOL.md](docs/PROTOCOL.md).
-
-## Tài liệu bắt đầu từ đây
-
-| Tài liệu | Đọc khi nào |
-|---|---|
-| [Cài đặt và chạy trên máy mới](docs/SETUP.md) | Muốn clone/sao chép repo rồi chạy API, DB và client |
-| [Bàn giao phiên tiếp theo](docs/HANDOFF.md) | Muốn tiếp tục làm từ trạng thái hiện tại, biết chính xác phần đã/chưa làm |
-| [Kiểm kê đến Phase 2](docs/IMPLEMENTED.md) | Muốn tra từng file và luồng thực tế đã chạy được |
-| [Yêu cầu sản phẩm](docs/PRODUCT_SPEC.md) | Muốn giữ đầy đủ ý định gameplay, UI, item, logo và mục tiêu mở rộng |
-| [Kiến trúc](docs/ARCHITECTURE.md) | Muốn hiểu ranh giới project, runtime, protocol và luật authoritative |
-| [Gói tin binary](docs/PROTOCOL.md) | Muốn biết byte layout và cách mở rộng dữ liệu realtime |
-| [Phase 1–10](docs/PHASES.md) | Muốn tự phát triển từng phase, biết file, thứ tự, test và điều kiện hoàn tất |
-
-## Chạy nhanh ở môi trường đã cài PostgreSQL
-
-Làm theo [SETUP.md](docs/SETUP.md) để tạo role/database riêng và cấu hình connection. Sau đó mở hai terminal tại thư mục gốc:
+Cần .NET 10 SDK, Node 22, PostgreSQL. Xem [hướng dẫn cài đặt](docs/SETUP.md) để cấu hình DB và JWT. Mở hai terminal tại thư mục gốc:
 
 ```powershell
 dotnet run --project src/Game.Api --urls http://127.0.0.1:5080
@@ -32,17 +16,33 @@ npm ci
 npm run dev
 ```
 
-Mở `http://127.0.0.1:5173/`. Có thể bấm **Lái thử offline** ngay; đăng ký/đăng nhập cần API và PostgreSQL. Sau đăng nhập, mở thêm tài khoản khác trong trình duyệt/tab khác để vào cùng development match. Máy tính dùng WASD/phím mũi tên để di chuyển, chuột để ngắm, click để bắn; phím 1–5 đổi đạn. Điện thoại dùng hai cần ảo, nút Bắn và thanh chọn đạn. Pháo có thanh chỉnh tầm rơi. Nút radar phóng to minimap trong 6 giây, hồi 30 giây. Để thử trên điện thoại cùng Wi-Fi, chạy `npm run dev -- --host 0.0.0.0` rồi dùng IP Wi-Fi của máy tính ở cổng 5173. Endpoint kiểm tra API: `http://127.0.0.1:5080/health`.
+Vào `http://127.0.0.1:5173/`. Khám phá và tập bắn chạy offline. Để chơi online, đăng ký/đăng nhập, tạo phòng với sức chứa mong muốn hoặc ghép nhanh; host bắt đầu trận.
 
-Giao diện trong trận ưu tiên điện thoại: khung game dùng gần hết màn hình, minimap và HUD thu gọn; xoay ngang thì thanh đạn chuyển sang góc trái để không che xe. Có thể kiểm tra bố cục với `cd client; npm run test:layout` khi Vite và Edge CDP đang chạy.
+**Điều khiển:** WASD/mũi tên lái, chuột ngắm và click bắn, `1–9` đổi súng, `R` nạp, `E` nhặt, `Q` dùng cứu thương, `T` dùng pin radar, `G` dùng hộp đạn, `N` đổi ngày/đêm, `L` bật/tắt đèn pha. Điện thoại có cần lái/ngắm, nút bắn, thanh súng vuốt được và các ô túi đồ chạm được. Nút `i` cạnh thanh súng mở bảng sát thương và thuộc tính; xem [bảng 9 vũ khí](docs/GAMEPLAY.md#vũ-khí-và-xe).
 
-## Kiểm tra baseline
+## Tài liệu
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Gameplay](docs/GAMEPLAY.md) | Map, bo, thời gian 5–50 người, item, tầm nhìn, giới hạn |
+| [Setup](docs/SETUP.md) | Cài môi trường, PostgreSQL, API, client, kiểm tra |
+| [Rooms](docs/ROOMS.md) | Tạo phòng, host, reconnect và API |
+| [Matches](docs/MATCHES.md) | Vòng đời trận, xếp hạng và lưu kết quả |
+| [Protocol](docs/PROTOCOL.md) | Binary v6 và SignalR MessagePack |
+| [Architecture](docs/ARCHITECTURE.md) | Ranh giới module và hướng mở rộng |
+| [Implemented](docs/IMPLEMENTED.md) | Chức năng, kiểm chứng và giới hạn thực tế |
+| [Assets](docs/ASSETS.md) | Skin Kenney và giấy phép |
+| [Phases](docs/PHASES.md) | Lịch sử triển khai và việc còn mở |
+| [Handoff](docs/HANDOFF.md) | Bàn giao vận hành |
+
+## Kiểm tra
 
 ```powershell
-dotnet build Game.sln
+dotnet build Game.sln --no-restore
+dotnet run --no-restore --project tests/Game.RoomProbe/Game.RoomProbe.csproj
 cd client
 npm run build
 npm run format:check
 ```
 
-Giữ `client/package-lock.json` khi chuyển máy và dùng `npm ci`. Không đưa `node_modules`, `bin`, `obj`, `.keys`, file `.env` hoặc dữ liệu PostgreSQL local vào source. Trạng thái DB/account trên máy gốc không tự đi theo repo.
+Khi API đang chạy, chạy các integration test trong `client/package.json` **lần lượt**: `test:loot`, `test:rooms`, `test:match`, `test:weapons`, `test:realtime`. Các bài tạo tài khoản có thể gặp rate limit 429 nếu chạy song song. `test:layout` cần Vite và Edge/Chrome CDP cổng 9224. Phòng 50 người có luật, spawn và protocol phù hợp nhưng chưa được đo tải dài hạn trên 50 máy thật; xem [giới hạn cụ thể](docs/GAMEPLAY.md#kiểm-tra-và-giới-hạn).

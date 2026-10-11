@@ -1,5 +1,10 @@
-import { lazy, Suspense, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { authenticate, type Session } from '../services/api/auth';
+import { currentRoom, finishRoom, leaveRoom, type RoomSummary } from '../services/api/rooms';
+import { RoomLobby } from './RoomLobby';
+import { MatchResultScreen } from './MatchResultScreen';
+import { getMatchResult } from '../services/api/matches';
+import type { MatchResult } from '../services/realtime/RealtimeClient';
 
 const PhaserGame = lazy(() =>
   import('../game/PhaserGame').then((module) => ({ default: module.PhaserGame })),
@@ -14,14 +19,54 @@ export function App(): React.JSX.Element {
       return null;
     }
   });
-  const [preview, setPreview] = useState(() =>
-    new URLSearchParams(window.location.search).has('preview'),
-  );
+  const [previewMode, setPreviewMode] = useState<'roam' | 'practice' | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('practice') ? 'practice' : params.has('preview') ? 'roam' : null;
+  });
+  const [activeRoom, setActiveRoom] = useState<RoomSummary | null>(null);
+  const [roomResult, setRoomResult] = useState<MatchResult | null>(null);
+  const enterRoom = useCallback((room: RoomSummary) => {
+    setRoomResult(null);
+    setActiveRoom(room);
+  }, []);
+  const onMatchEnd = useCallback((result: MatchResult) => {
+    setRoomResult(result);
+    setActiveRoom((room) => (room ? { ...room, state: 'Finished' } : room));
+  }, []);
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!session || !activeRoom) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const room = await currentRoom(session);
+        if (!active) return;
+        if (!room || room.id !== activeRoom.id) {
+          if (activeRoom.state !== 'Finished') setActiveRoom(null);
+          return;
+        }
+        if (room.state === 'Finished') {
+          if (activeRoom.state !== 'Finished') setActiveRoom(room);
+          if (!roomResult) {
+            const result = await getMatchResult(session, room.id);
+            if (active && result) setRoomResult(result);
+          }
+        }
+      } catch {
+        /* A short network interruption should not close the arena. */
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 2000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [session, activeRoom, roomResult]);
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -39,12 +84,43 @@ export function App(): React.JSX.Element {
   }
 
   function signOut(): void {
+    if (session)
+      void currentRoom(session)
+        .then((room) => room && leaveRoom(session, room.id))
+        .catch(() => {});
     sessionStorage.removeItem('scrap-session');
     setSession(null);
-    setPreview(false);
+    setActiveRoom(null);
+    setRoomResult(null);
+    setPreviewMode(null);
   }
 
-  const playing = Boolean(session || preview);
+  async function exitArena(): Promise<void> {
+    if (activeRoom && session) {
+      try {
+        await leaveRoom(session, activeRoom.id);
+        setActiveRoom(null);
+        setRoomResult(null);
+      } catch (cause) {
+        if (activeRoom.state === 'Finished') {
+          setActiveRoom(null);
+          setRoomResult(null);
+        } else setError(cause instanceof Error ? cause.message : 'Không rời được phòng.');
+      }
+    } else setPreviewMode(null);
+  }
+
+  async function finishArena(): Promise<void> {
+    if (!activeRoom || !session) return;
+    try {
+      const finished = await finishRoom(session, activeRoom.id);
+      setActiveRoom(finished);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không kết thúc được trận.');
+    }
+  }
+
+  const playing = Boolean(activeRoom || previewMode);
   return (
     <div className={`app-shell${playing ? ' is-playing' : ''}`}>
       <header className="topbar">
@@ -58,7 +134,7 @@ export function App(): React.JSX.Element {
         </div>
         <div className="topbar-center">
           <span className="status-light" /> XƯỞNG XE HỖN LOẠN{' '}
-          <span className="version">/ PHASE 02</span>
+          <span className="version">/ BATTLE ARENA</span>
         </div>
         <div className="topbar-right">
           {session ? (
@@ -74,7 +150,9 @@ export function App(): React.JSX.Element {
         </div>
       </header>
 
-      {playing ? (
+      {session && !activeRoom ? (
+        <RoomLobby session={session} onEnter={enterRoom} />
+      ) : playing ? (
         <main className="play-layout">
           <div className="play-intro">
             <div>
@@ -82,17 +160,39 @@ export function App(): React.JSX.Element {
               <h1>Khu phố phế liệu</h1>
             </div>
             <p>Bản đồ rộng · ẩn nấp trong bụi · radar quét vị trí</p>
-            <button
-              className="leave-button"
-              onClick={() => (preview ? setPreview(false) : signOut())}
-            >
-              ← Về xưởng
-            </button>
+            <div className="arena-actions">
+              {activeRoom?.state === 'Playing' && activeRoom.hostId === session?.playerId && (
+                <button className="finish-button" onClick={() => void finishArena()}>
+                  Kết thúc trận
+                </button>
+              )}
+              <button className="leave-button" onClick={() => void exitArena()}>
+                ← Về sảnh
+              </button>
+            </div>
           </div>
+          {error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
           <section className="game-frame" aria-label="Đấu trường Scrap Street">
-            <Suspense fallback={<div className="game-loading">ĐANG KHỞI ĐỘNG XE...</div>}>
-              <PhaserGame session={session} />
-            </Suspense>
+            {activeRoom?.state === 'Finished' && session ? (
+              <MatchResultScreen
+                result={roomResult}
+                playerId={session.playerId}
+                onExit={() => void exitArena()}
+              />
+            ) : (
+              <Suspense fallback={<div className="game-loading">ĐANG KHỞI ĐỘNG XE...</div>}>
+                <PhaserGame
+                  session={activeRoom ? session : null}
+                  roomId={activeRoom?.id}
+                  mode={previewMode ?? 'roam'}
+                  onMatchEnd={onMatchEnd}
+                />
+              </Suspense>
+            )}
           </section>
         </main>
       ) : (
@@ -116,9 +216,17 @@ export function App(): React.JSX.Element {
                 <span>✦ XE TỰ CHẾ</span>
                 <span>✦ ĐẤU TRƯỜNG VUI NHỘN</span>
               </div>
-              <button className="primary-button" onClick={() => setPreview(true)}>
-                LÁI THỬ OFFLINE <span>↗</span>
-              </button>
+              <div className="mode-actions" aria-label="Chọn chế độ chơi offline">
+                <button className="primary-button" onClick={() => setPreviewMode('roam')}>
+                  KHÁM PHÁ TỰ DO <span>↗</span>
+                </button>
+                <button className="practice-button" onClick={() => setPreviewMode('practice')}>
+                  TẬP BẮN · 5 MỤC TIÊU <span>◎</span>
+                </button>
+              </div>
+              <p className="mode-caption">
+                Đăng nhập để đấu online; chơi thử hai chế độ offline ngay.
+              </p>
             </div>
             <div className="hero-art" aria-hidden="true">
               <div className="moon" />
@@ -153,9 +261,7 @@ export function App(): React.JSX.Element {
             <div>
               <div className="eyebrow">LƯU DANH Ở XƯỞNG</div>
               <h2>{mode === 'login' ? 'Đăng nhập để sẵn sàng.' : 'Tạo tài khoản của bạn.'}</h2>
-              <p>
-                Trong Phase 1, tài khoản xác thực qua API; bản đồ lái thử vẫn hoạt động offline.
-              </p>
+              <p>Tài khoản lưu qua API; bạn cũng có thể chơi thử offline ngay trên trình duyệt.</p>
             </div>
             <form onSubmit={submit}>
               <div className="form-row">
@@ -210,7 +316,7 @@ export function App(): React.JSX.Element {
       )}
       <footer className="site-footer">
         <span>SCRAP STREET © 2026</span>
-        <span>ĐANG LẮP RÁP · PHASE 02</span>
+        <span>SCRAP STREET · BATTLE ARENA</span>
       </footer>
     </div>
   );

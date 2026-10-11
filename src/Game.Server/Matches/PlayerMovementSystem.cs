@@ -24,8 +24,8 @@ internal static class PlayerMovementSystem
         player.VelocityX += changeX;
         player.VelocityY += changeY;
 
-        var nextX = Math.Clamp(player.X + player.VelocityX * TickSeconds, 35, 3165);
-        var nextY = Math.Clamp(player.Y + player.VelocityY * TickSeconds, 35, 2165);
+        var nextX = Math.Clamp(player.X + player.VelocityX * TickSeconds, 35, MapData.Width - 35);
+        var nextY = Math.Clamp(player.Y + player.VelocityY * TickSeconds, 35, MapData.Height - 35);
         if (Blocked(nextX, player.Y, buildings) || (nextX == player.X && player.VelocityX != 0))
             player.VelocityX = 0;
         else player.X = nextX;

@@ -1,0 +1,5 @@
+[
+  { "kind": "HealthKit", "heal": 40, "pickupRadius": 80, "respawnTicks": 900, "maxStack": 3, "startingCount": 1 },
+  { "kind": "RadarCell", "heal": 0, "pickupRadius": 80, "respawnTicks": 1200, "maxStack": 2, "startingCount": 1 },
+  { "kind": "AmmoCrate", "heal": 0, "pickupRadius": 80, "respawnTicks": 900, "maxStack": 3, "startingCount": 1 }
+]

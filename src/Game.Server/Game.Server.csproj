@@ -8,6 +8,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Game.Application\Game.Application.csproj" />
+    <EmbeddedResource Include="..\..\data\map.json" LogicalName="Game.Server.MapDefinition.json" />
+    <EmbeddedResource Include="..\..\data\weapons.json" LogicalName="Game.Server.WeaponDefinitions.json" />
+    <EmbeddedResource Include="..\..\data\items.json" LogicalName="Game.Server.ItemDefinitions.json" />
+    <EmbeddedResource Include="..\..\data\loot_tables.json" LogicalName="Game.Server.LootSpawns.json" />
+    <EmbeddedResource Include="..\..\data\game_rules.json" LogicalName="Game.Server.GameRules.json" />
+    <InternalsVisibleTo Include="Game.RoomProbe" />
   </ItemGroup>
 
 </Project>

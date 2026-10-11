@@ -6,6 +6,7 @@ client/dist/
 .env
 .runtime-test/
 .runtime-dev/
+.runtime-cdp/
 **/.keys/
 phase1-*.png
 *.user

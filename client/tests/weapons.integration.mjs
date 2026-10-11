@@ -19,12 +19,15 @@ async function register(name) {
   return response.json();
 }
 function field(value, pascal, camel, index) { return value[pascal] ?? value[camel] ?? value[index]; }
+function weapon(value) { return typeof value === 'string' ? WeaponKind[value] : Number(value); }
 
 const accounts = await Promise.all([register(`wp_a_${suffix}`), register(`wp_b_${suffix}`)]);
 const connections = [];
 const latest = [null, null];
 const snapshots = [[], []];
 const impacts = [[], []];
+const ammoEvents = [[], []];
+const kills = [[], []];
 let ids;
 try {
   for (let i = 0; i < 2; i++) {
@@ -40,9 +43,11 @@ try {
       const impact = decodeImpact(payload);
       if (impact) impacts[i].push(impact);
     });
+    connection.on('AmmoChanged', (state) => { ammoEvents[i].push(state); });
+    connection.on('Kill', (event) => { kills[i].push(event); });
     await connection.start();
-    const joined = await connection.invoke('JoinMatch');
-    assert.equal(Number(field(joined, 'ProtocolVersion', 'protocolVersion', 0)), 5);
+    const joined = await connection.invoke('JoinMatch', 'development');
+    assert.equal(Number(field(joined, 'ProtocolVersion', 'protocolVersion', 0)), 6);
     if (i === 1) {
       const roster = field(joined, 'Players', 'players', 3);
       ids = accounts.map((account) => Number(field(
@@ -53,6 +58,8 @@ try {
   }
   const health = (viewer, id) => latest[viewer]?.players.find((p) => p.networkId === id)?.health;
   await waitFor(() => latest.every((snapshot) => snapshot?.players.length === 2));
+  await waitFor(() => ammoEvents.every((events) => events.length === 9));
+  assert.equal(Number(field(ammoEvents[0][0], 'Loaded', 'loaded', 1)), 12);
   await connections[0].send('InputBatch', encodeInput(1, 0, 0, 0));
   await sleep(80);
   await connections[0].send('Fire', Uint8Array.of(4, 5, 7, 0, 0));
@@ -62,6 +69,9 @@ try {
   await connections[0].send('Fire', encodeFire(WeaponKind.Bullet, 1800));
   await waitFor(() => impacts[1].some((p) => p.weapon === WeaponKind.Bullet && p.hitNetworkId === ids[1]));
   await waitFor(() => health(1, ids[1]) === 75);
+  await waitFor(() => ammoEvents[0].some((state) =>
+    weapon(field(state, 'Weapon', 'weapon', 0)) === WeaponKind.Bullet &&
+    Number(field(state, 'Loaded', 'loaded', 1)) === 11));
 
   await connections[0].send('InputBatch', encodeInput(2, 0, 0, Math.PI));
   await sleep(260);
@@ -71,14 +81,26 @@ try {
   await sleep(400);
   await connections[0].send('Fire', encodeFire(WeaponKind.Rocket, 2200));
   await waitFor(() => impacts[1].some((p) => p.weapon === WeaponKind.Rocket));
-  await waitFor(() => health(1, ids[1]) === 35 && health(0, ids[0]) === 60);
+  await waitFor(() => health(1, ids[1]) === 35 && health(0, ids[0]) === 100);
 
   await sleep(1030);
   await connections[0].send('Fire', encodeFire(WeaponKind.Artillery, 80));
   await waitFor(() => snapshots[0].some((s) => s.projectiles.some((p) =>
     p.weapon === WeaponKind.Artillery && p.progress > 0 && p.progress < 255)));
   await waitFor(() => impacts[1].some((p) => p.weapon === WeaponKind.Artillery));
-  await waitFor(() => health(1, ids[1]) === 0 && health(0, ids[0]) === 15);
+  await waitFor(() => health(1, ids[1]) === 0 && health(0, ids[0]) === 100);
+  await waitFor(() => kills.every((events) => events.some((kill) =>
+    field(kill, 'KillerId', 'killerId', 0) === accounts[0].playerId &&
+    field(kill, 'VictimId', 'victimId', 2) === accounts[1].playerId)));
+  assert.equal(kills[0].length, 1);
+  await connections[0].send('Reload', WeaponKind.Bullet);
+  await waitFor(() => ammoEvents[0].some((state) =>
+    weapon(field(state, 'Weapon', 'weapon', 0)) === WeaponKind.Bullet &&
+    Number(field(state, 'ReloadTicks', 'reloadTicks', 3)) > 0));
+  await waitFor(() => ammoEvents[0].some((state) =>
+    weapon(field(state, 'Weapon', 'weapon', 0)) === WeaponKind.Bullet &&
+    Number(field(state, 'Loaded', 'loaded', 1)) === 12 &&
+    Number(field(state, 'Reserve', 'reserve', 2)) === 58), 3000);
   await waitFor(() => health(1, ids[1]) === 100, 4500);
 
   await connections[0].send('Fire', encodeFire(WeaponKind.Mud, 1200));
@@ -106,7 +128,7 @@ try {
   await sleep(120);
   const afterNormal = latest[1].players.find((p) => p.networkId === ids[1]).x;
   assert.ok(normalSpeed > slowSpeed + 60 && afterNormal > afterSlow);
-  console.log('PASS: bullet trajectory, rocket splash, artillery arc, mud puddle/slow, impact binary and server damage');
+  console.log('PASS: projectile damage, ammo/reload, kill attribution, mud slow and room-wide combat events');
 } finally {
   await Promise.all(connections.map((connection) => connection.stop()));
 }

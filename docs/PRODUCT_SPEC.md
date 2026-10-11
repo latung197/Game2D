@@ -1,5 +1,7 @@
 # Yêu cầu sản phẩm và gameplay
 
+**Trạng thái 2026-10-11:** đây là yêu cầu và mục tiêu dài hạn, không phải danh sách tính năng đã hoàn thành. Trạng thái code xem [IMPLEMENTED.md](IMPLEMENTED.md) và [GAMEPLAY.md](GAMEPLAY.md). Phòng 5–50, map 4000×3000, bo theo sức chứa và túi đồ ba loại đã có; tải 50 người thực tế, cosmetic, leaderboard và nhiều server vẫn chưa được xác nhận/triển khai. Các đoạn nói về MVP 10 người bên dưới là lịch sử thiết kế ban đầu.
+
 Đây là bản gom yêu cầu để không mất ý định ban đầu khi chuyển máy/phiên. **Nó không khẳng định các tính năng đã được code.** Trạng thái triển khai nằm trong [IMPLEMENTED.md](IMPLEMENTED.md) và thứ tự làm trong [PHASES.md](PHASES.md).
 
 ## 1. Tầm nhìn
@@ -25,13 +27,13 @@ Phương tiện/nhân vật gợi ý: xe tăng mini, xe máy gắn súng, xe đ�
 
 Room fields: `RoomId`, `RoomCode`, `RoomName`, `HostPlayerId`, `Status`, `CurrentPlayers`, `AlivePlayers`, `MaxPlayers`, `MapId`, `CreatedAt`. Command: create/join/leave/quick join/spectate. States: `Waiting`, `Starting`, `Playing`, `Ending`, `Finished`. Mục tiêu lâu dài tối đa **50 người/room**; vertical slice đầu tiên **10 người**. Nhiều room/match chạy cùng lúc, mỗi match có runtime cô lập.
 
-Late join vào `Playing` chỉ khi `AlivePlayers > 10` và `CurrentPlayers < 50`; server chọn spawn hợp lệ tránh enemy gần đó, cấp spawn protection vài giây. Bắn chủ động làm mất protection ngay. Với cap 10 ở vertical slice, late join vào trận đang chơi mặc nhiên chưa bật.
+Mục tiêu sau khi nâng cap: late join vào `Playing` chỉ khi `AlivePlayers > 10` và `CurrentPlayers < 50`; server chọn spawn hợp lệ tránh enemy gần đó, cấp spawn protection vài giây. Bắn chủ động làm mất protection ngay. Bản hiện tại cap 10: phòng thường không cho vào muộn; **ghép nhanh** cho vào muộn khi còn chỗ, chưa có spawn protection.
 
 Flow: login → lobby → room browser/create/join → waiting → match start/spawn → loot/combat/bo thu → death/final battle → winner/result → lobby. Match chỉ ghi kills/deaths/placement/damage/playtime/winner/rewards khi kết thúc.
 
 ## 5. Map và camera
 
-Map lớn hơn màn hình, camera follow. Map production dùng tilemap, tách `MapDefinition`, collision, decoration, spawn, loot spawn và special area layer. Nội dung có đường chính/nhỏ, ngõ, bãi đất, nhà, tường, cây, bụi, ao, cầu, thùng, chướng ngại, khu loot và khu nguy hiểm. `MapDefinition` phải cho phép thêm map không sửa GameLoop. Phase 1 mới có map Graphics placeholder 2400×1600.
+Map lớn hơn màn hình, camera follow. Bản hiện tại 4000×3000 dùng `data/map.json` chung cho nhà/bụi và Graphics Phaser cho đường, cỏ, cây, nhà chi tiết. Mục tiêu production là tilemap tách collision, decoration, spawn, loot spawn và special area layer, có thêm ngõ, ao, cầu, khu loot/nguy hiểm và nhiều map mà không sửa GameLoop.
 
 ## 6. Movement và input
 
@@ -75,7 +77,7 @@ Super items rất hiếm: `Map Barrage` cảnh báo toàn map rồi sau khoảng
 
 ## 10. Safe zone
 
-`SafeZoneState`: `CenterX`, `CenterY`, `CurrentRadius`, `TargetRadius`, `ShrinkStartTime`, `ShrinkEndTime`, `Phase`. Phase là `Waiting`, `Warning`, `Shrinking`, `Stable`; vòng nhỏ dần và server quyết định tâm/radius/damage. Damage mẫu theo phase: **1, 2, 4, 7, 12 HP/s**. Client chỉ render vòng và cảnh báo, server tích lũy damage theo thời gian simulation.
+`ZoneState` hiện có center/radius và target center/radius, `RemainingTicks`, `DamagePerSecond`, `Completed`. Giai đoạn là `Warning`, `Shrinking`, `Stable`; vòng nhỏ dần và server quyết định tâm/radius/damage. Damage hiện dùng **1, 2, 4, 7, 12 HP/s**. Client vẽ vòng và cảnh báo, server tích lũy damage theo tick. Thời gian từng giai đoạn ở [MATCHES.md](MATCHES.md).
 
 ## 11. Networking, nhiều server và anti-cheat
 
@@ -85,7 +87,7 @@ Anti-cheat: JWT cho SignalR; PlayerId từ claims; validate sequence, movement s
 
 ## 12. Hiệu năng, âm thanh và cấu hình
 
-Target cuối: 50 người/room sau load test; tick 30 Hz có khoảng 33,33 ms/tick. Hạn chế LINQ/allocation trong hot loop, dùng spatial partition, pooling và struct khi đo đạc cho thấy có lợi. GameLoop đo tick duration và cảnh báo khi vượt budget. Client AudioManager có nhóm Weapon/Explosion/Vehicle/UI/Item/Ambient và Master/Music/SFX volume. Config data dự kiến: `weapons.json`, `items.json`, `loot_tables.json`, `maps.json`, `game_rules.json`; chưa tồn tại ở Phase 1.
+Target cuối: 50 người/room sau load test; tick 30 Hz có khoảng 33,33 ms/tick. Hạn chế LINQ/allocation trong hot loop, dùng spatial partition, pooling và struct khi đo đạc cho thấy có lợi. GameLoop đo tick duration và cảnh báo khi vượt budget. Client AudioManager với nhóm Weapon/Explosion/Vehicle/UI/Item/Ambient và Master/Music/SFX volume vẫn là mục tiêu. Config đã có: `data/weapons.json`, `data/items.json`, `data/loot_tables.json`, `data/map.json`, `data/game_rules.json`.
 
 ## 13. Event vocabulary
 

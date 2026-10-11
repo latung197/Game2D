@@ -1,61 +1,57 @@
-# Gói tin realtime binary v5
+# Giao thức realtime v6
 
-Trận online dùng SignalR qua WebSocket với MessagePack Hub Protocol. Dữ liệu gameplay là `byte[]`/`Uint8Array` bên trong frame SignalR; REST đăng ký/đăng nhập vẫn dùng JSON. Các số nhiều byte dùng **little-endian**. Mỗi payload game có `version=5` và `kind`; codec từ chối sai version, kind hoặc độ dài. V5 không tương thích với client v4, nên cần tải lại client sau khi cập nhật server.
+Client dùng SignalR + MessagePack. SignalR ưu tiên WebSocket và có fallback. Payload nhị phân game được bọc trong frame SignalR, mọi số nhiều byte là **little-endian**. `GameProtocol.Version = 6`; codec hai phía từ chối version/kind/độ dài sai. Đổi cấu trúc binary phải tăng version đồng thời ở C# và TypeScript.
 
-## Các lệnh client gửi
+## Client gửi
 
 | Hub method | Byte | Layout |
 |---|---:|---|
-| `InputBatch` | 14 | `version: u8`, `kind=1: u8`, `sequence: u32`, `clientTick: u32`, `moveX: i8`, `moveY: i8`, `aim: u8`, `flags=0: u8` |
-| `Fire` | 5 | `version: u8`, `kind=5: u8`, `weapon: u8`, `range: u16` |
+| `InputBatch(byte[])` | 14 | `version:u8`, `kind=1:u8`, `sequence:u32`, `clientTick:u32`, `moveX:i8`, `moveY:i8`, `aim:u8`, `flags=0:u8` |
+| `Fire(byte[])` | 5 | `version:u8`, `kind=5:u8`, `weapon:u8`, `range:u16` |
 
-`moveX/moveY` thuộc [-127, 127]; -128 và flags khác 0 bị từ chối. Góc aim chia vòng tròn thành 256 mức. `clientTick` tăng mỗi bước dự đoán 1/30 giây; server bỏ sequence hoặc clientTick cũ/trùng. `weapon` từ 1 đến 5 theo bảng bên dưới. `range` là khoảng cách mong muốn tính bằng world unit, được server kẹp trong [80, tầm tối đa của vũ khí]. Client không gửi tọa độ, player ID, HP hoặc damage. Server lấy danh tính từ JWT và vị trí/góc ngắm đã lưu trong match.
+Trục lái lượng tử trong [-127,127]; giá trị -128 và flags khác 0 bị từ chối. Góc lượng tử 256 mức. Sequence và clientTick tăng theo input 30 Hz; server từ chối số cũ/trùng. Fire range bị kẹp theo vũ khí. Server lấy player/room từ JWT và connection binding; client không gửi HP, damage hay vị trí tùy ý.
+
+Hub methods MessagePack khác: `JoinMatch(roomId)`, `Reload(weapon)`, `Pickup(itemId)`, `UseItem(kind)`, `SetHeadlights(enabled)`, `UseRadar()`. `UseRadar` trả payload binary radar 6 byte; các phương thức còn lại trả record MessagePack. Trận `development` chỉ có trong môi trường Development.
 
 ## Snapshot server gửi
 
-Độ dài: **`15 + 14 × P + 8 × J + 7 × H` byte** với P là số xe, J là số projectile, H là số vũng bùn. Các record xếp liên tiếp theo thứ tự xe, projectile, vũng bùn.
+Độ dài `15 + 14 × P + 8 × J + 7 × H` byte, với P xe, J projectile, H vùng bùn. Thứ tự: header, xe, projectile, bùn.
 
-| Offset | Byte | Nội dung |
+| Offset | Byte | Trường |
 |---:|---:|---|
-| 0 | 1 | `version=5` |
+| 0 | 1 | `version=6` |
 | 1 | 1 | `kind=2` |
-| 2 | 4 | `serverTick: u32` |
+| 2 | 4 | `serverTick:u32` |
 | 6 | 1 | Số xe P |
-| 7 | 2 | Số projectile J (`u16`) |
-| 9 | 2 | Số vũng bùn H (`u16`) |
-| 11 | 4 | `lastProcessedSequence: u32` của **người nhận snapshot** |
-| 15... | 14/xe | `networkId: u16`, `x: u16`, `y: u16`, `rotation: u8`, `aim: u8`, `health: u8`, `status: u8`, `velocityX: i16`, `velocityY: i16` |
-| Sau xe | 8/projectile | `id: u16`, `x: u16`, `y: u16`, `weapon: u8`, `progress: u8` |
-| Sau projectile | 7/vũng | `id: u16`, `x: u16`, `y: u16`, `remainingTicks: u8` |
+| 7 | 2 | Số projectile J |
+| 9 | 2 | Số vùng bùn H |
+| 11 | 4 | `lastProcessedSequence:u32` riêng cho người nhận |
+| 15... | 14/xe | `networkId:u16, x:u16, y:u16, rotation:u8, aim:u8, health:u8, status:u8, velocityX:i16, velocityY:i16` |
+| Sau xe | 8/projectile | `id:u16, x:u16, y:u16, weapon:u8, progress:u8` |
+| Sau projectile | 7/vùng | `id:u16, x:u16, y:u16, remainingTicks:u8` |
 
-X/Y là tọa độ world nhân 16 rồi làm tròn, độ phân giải 1/16 unit; map 3200×2200 vừa trong `u16`. Vận tốc là world unit/giây làm tròn, dấu `i16`. Góc chia thành 256 mức. `status=1` nghĩa là đang bị bùn làm chậm, `0` là bình thường. `progress` chỉ dùng cho đạn pháo: 0–255 từ lúc phóng đến lúc rơi; các đạn khác bằng 0. `remainingTicks` của vũng bùn tối đa 120. Network ID và ID vật thể chỉ có ý nghĩa trong match; roster `JoinMatch` và `PlayerJoined`/`PlayerLeft` ánh xạ network ID sang tài khoản. GUID và tên không lặp trong snapshot.
+X/Y = world unit × 16, làm tròn; map 4000 × 3000 vừa trong `u16`, giới hạn trục khoảng 4095,94. Vận tốc làm tròn world unit/giây. `status=1` là đang bị bùn làm chậm. Roster `JoinMatch` và event `PlayerJoined`/`PlayerLeft` ánh xạ network ID sang GUID/tên; snapshot không gửi lại tên. Snapshot khoảng 10 Hz, riêng từng viewer, lọc đối thủ ở xa hơn 850 unit và người trong bụi xa hơn 145 unit. Đèn pha mở ngoại lệ cho mục tiêu trong bụi ở nón hướng ngắm ±0,34 rad, tối đa 570 unit, nếu không bị nhà chắn. Radar hiện mọi đối thủ trong 180 tick. Projectile/bùn thường lọc ở 900 unit. Server giới hạn 128 projectile và 32 vùng bùn đồng thời.
 
-Snapshot khoảng 10 Hz, riêng theo từng người xem: trường ACK chỉ xác nhận input của người nhận. Client lấy self state + vận tốc từ snapshot, loại input đã ACK và phát lại input còn chờ; xe khác được nội suy trễ ba tick. Xe ở xa hơn 850 unit bị ẩn; xe trong bụi chỉ lộ ở dưới 145 unit. Projectile/vũng bùn ở xa hơn 900 unit cũng không có trong snapshot. Radar đang hiệu lực bỏ qua các giới hạn này. Server giới hạn tối đa 128 projectile và 32 vũng bùn cùng lúc.
+Movement 30 Hz, gia tốc 1000 unit/s², phanh 1400, tốc độ tối đa 280 hoặc 126 khi dính bùn, xoay tối đa 10 rad/s. Sau sáu tick không có input, server trả trục lái về 0. Xe ở trong `[35,3965] × [35,2965]`; nhà nới 28 unit để va chạm. Client dự đoán và replay input chưa ACK; server là nguồn vị trí cuối. `clientTick` chỉ dùng chống gói cũ, chưa tua lại mô phỏng server.
 
-Movement dùng tick 30 Hz, tăng tốc 1000 unit/s², phanh 1400 unit/s², giới hạn 280 unit/s hoặc 126 khi dính bùn; xoay tối đa 10 rad/s. Sau sáu tick không nhận input mới, server trả trục lái về 0 để xe phanh. Va chạm dùng hình chữ nhật nhà nới 28 unit và giới hạn xe trong vùng [35, 3165] × [35, 2165]. Client và server cùng quy tắc, nhưng server là nguồn sự thật; chỉnh vị trí nhỏ được làm mượt, chết/hồi sinh hoặc sai lệch trên 100 unit được áp ngay. `clientTick` hiện dùng để bác bỏ gói cũ, chưa dùng để tua lại simulation server.
+## Combat binary
 
-## Sự kiện server gửi
-
-| Event | Kind | Byte | Layout sau `version, kind` |
+| Event | Kind | Byte | Payload sau `version,kind` |
 |---|---:|---:|---|
-| `Shot` | 3 | 15 | `startX, startY, endX, endY: u16 × 4`; `shooterNetworkId, hitNetworkId: u16 × 2`; `targetHealth: u8` |
-| `RadarResult` | 4 | 6 | `activeTicks: u16`, `cooldownTicks: u16` |
-| `Impact` | 6 | 12 | `projectileId: u16`, `x, y: u16 × 2`, `weapon: u8`, `hitNetworkId: u16`, `targetHealth: u8` |
+| `Shot` | 3 | 16 | `startX,startY,endX,endY:u16×4`, `shooterNetworkId,hitNetworkId:u16×2`, `targetHealth:u8`, `weapon:u8` |
+| `RadarResult` | 4 | 6 | `activeTicks:u16`, `cooldownTicks:u16` |
+| `Impact` | 6 | 12 | `projectileId:u16`, `x,y:u16×2`, `weapon:u8`, `hitNetworkId:u16`, `targetHealth:u8` |
 
-`Shot` dành cho laser hitscan; `Impact` đánh dấu điểm đạn thường/tên lửa/pháo/bùn kết thúc. `hitNetworkId=0` nghĩa là không có mục tiêu trực tiếp. Với tên lửa/pháo nổ lan, `Impact` chỉ chứa **một** người trúng để hiển thị; HP chính xác của mọi người vẫn nằm trong snapshot kế tiếp. Radar có hiệu lực 180 tick (6 giây), hồi 900 tick (30 giây). Xe 0 HP không lái/bắn và hồi sinh sau 90 tick (3 giây).
+`Shot` dành cho laser, bắn tỉa và xung điện tức thời; `Impact` dành cho đạn bay, tên lửa, pháo, lựu đạn và bùn. Nổ lan có thể trúng nhiều người, trừ chính người bắn; `Impact` chỉ hiển thị một mục tiêu, snapshot kế tiếp có HP thật của tất cả. Dữ liệu băng đạn, nạp, kill feed dùng MessagePack `AmmoChanged`/`Kill`. ID súng 1–9 theo bảng trong [GAMEPLAY.md](GAMEPLAY.md#vũ-khí-và-xe); luật chính xác ở `data/weapons.json`.
 
-## Luật vũ khí hiện tại
+## Item, bo và kết quả MessagePack
 
-| ID | Vũ khí | Tầm tối đa | Hồi (tick) | Sát thương | Cách hoạt động |
-|---:|---|---:|---:|---:|---|
-| 1 | Đạn xa | 1800 | 7 | 25 | Đạn bay 1100 unit/s, va nhà hoặc xe đầu tiên |
-| 2 | Laser | 2800 | 12 | 25 | Tia tức thời, bị nhà chắn |
-| 3 | Tên lửa | 2200 | 30 | 40 | Bay 520 unit/s, nổ bán kính 110 unit tại va chạm |
-| 4 | Pháo | 1350 | 45 | 45 | Bay cung hiển thị trong 45 tick (1,5 giây), nổ bán kính 145 unit ở điểm rơi; có thể vượt nhà |
-| 5 | Bùn | 1200 | 20 | 0 | Bay 650 unit/s; tạo vũng bán kính 100 unit tồn tại 120 tick (4 giây), giảm tốc xe từ 280 xuống 126 unit/s |
+`WorldItems { MatchId, Revision, Items[] }` phát khi vào trận, nhặt, respawn loot. Item gồm `Id,Kind,X,Y`; client bỏ qua revision cũ. `Pickup(itemId)` trả `{ Accepted,Code,ItemId,Health }`, có thể từ chối `not_in_match`, `dead`, `unknown_item`, `unavailable`, `too_far`, `inventory_full`. Khi thành công, server cất item vào túi rồi phát `ItemPicked` cho phòng và `InventoryChanged { HealthKits,RadarCells,AmmoCrates }` riêng cho người nhặt. Trường `Health`/`NewHealth` của event pickup chỉ là HP hiện tại. ID item: 1 cứu thương, 2 pin radar, 3 hộp đạn.
 
-Nổ lan có thể trúng cả người bắn. Đạn pháo dùng đường bay và thời gian rơi do server quyết định; cung cao trên client là hiệu ứng 2D, chưa có mô phỏng vật lý theo trục cao. Chưa có ammo/reload, loại bẫy khác, giáp hoặc kết liễu theo loại vũ khí.
+`UseItem(kind)` trả `{ Accepted,Code,Kind,Inventory,Health,Radar,Ammo[] }`. Từ chối `dead`, `empty`, `full_health`, `ammo_full`, `unknown_item` hoặc `not_in_match`. Hiệu ứng áp server, rồi client nhận số lượng còn lại. Đèn pha bật/tắt bằng `SetHeadlights(bool)`; trạng thái này được giữ khi reconnect. `UseRadar()` là năng lực radar có cooldown 900 tick; pin radar là consumable có thể kích hoạt radar ngay.
 
-## Kiểm thử và giới hạn
+`ZoneState` gồm `PhaseIndex, Stage, CenterX/Y, Radius, TargetX/Y, TargetRadius, RemainingTicks, DamagePerSecond, Completed`; phát khi join và khoảng 10 Hz. `MatchEnded` chứa `MatchId, WinnerId?, WinnerName?, EndedAt, Players[]` với placement/kill/death. `GET /api/matches/{id}` trả kết quả đã lưu cho participant. Xem [GAMEPLAY.md](GAMEPLAY.md) và [MATCHES.md](MATCHES.md).
 
-`npm run test:realtime` kiểm tra snapshot v5 hai xe **43 byte**, laser 15 byte, HP/death/respawn, radar/ẩn bụi, reconnect. `npm run test:movement` kiểm tra prediction/replay/collision/interpolation, `npm run test:movement:server` kiểm tra tốc độ, va nhà, sequence/clientTick/ACK; `npm run test:weapons` kiểm tra vũ khí; `npm run test:browser` kiểm tra hai tab, lái qua màn chạm với trễ mô phỏng 80 ms. Các con số là payload game; frame WebSocket còn có overhead SignalR/MessagePack. Mức trễ trên là kiểm thử trình duyệt giả lập, chưa thay thế đo trên đường mạng thật hoặc tải nhiều phòng.
+## Kiểm tra
+
+`client/tests/realtime.integration.mjs` kiểm tra snapshot/binary, stealth/radar và reconnect; `client/tests/loot.integration.mjs` kiểm tra đồng bộ item/túi đồ; `tests/Game.RoomProbe` kiểm tra luật server. 50 người trong cùng một snapshot dùng tối đa khoảng `15 + 14×50 = 715` byte trước overhead SignalR/MessagePack nếu không có projectile/hazard; AOI thường giảm số xe được gửi. Đây là kích thước lý thuyết, chưa phải phép đo băng thông tổng khi đủ 50 kết nối.

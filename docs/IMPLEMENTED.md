@@ -1,46 +1,48 @@
-# Kiểm kê code hiện tại
+# Chức năng đã triển khai và mức kiểm chứng
 
-Tài liệu này ghi đúng phần đang chạy trong repo ngày 2026-10-09. Lộ trình còn lại ở [PHASES.md](PHASES.md); byte layout chi tiết ở [PROTOCOL.md](PROTOCOL.md).
+Cập nhật 2026-10-11. Tài liệu này mô tả code hiện tại; cấu hình chi tiết ở [GAMEPLAY.md](GAMEPLAY.md), API phòng ở [ROOMS.md](ROOMS.md), payload ở [PROTOCOL.md](PROTOCOL.md).
 
 ## Backend
 
-| Vị trí | Đã triển khai |
-|---|---|
-| `Game.Api` | ASP.NET Core host, JWT, CORS, auth rate limit, migration, `/health`, auth REST và `/hubs/game` |
-| `Game.Infrastructure` | EF Core/Npgsql lưu tài khoản; state trận không lưu DB |
-| `Game.Shared/Contracts` | Binary protocol v5, codec little-endian cho input, fire, snapshot, laser, radar, impact |
-| `Game.Realtime` | Hub xác thực JWT, route lệnh, publisher phát byte payload bằng SignalR MessagePack |
-| `Game.Server/Matches` | Development match tối đa 10 người, `PlayerMovementSystem` tick 30 Hz với gia tốc/va nhà, HP, radar, projectile, bùn |
-| `Game.Application` | Auth service, abstraction kết nối Hub/server/publisher |
+| Phần | Code/dữ liệu | Trạng thái |
+|---|---|---|
+| Tài khoản | `Game.Api`, `Game.Infrastructure` | Đăng ký/đăng nhập, password hash, JWT, `/api/me`, auth rate limit, PostgreSQL |
+| Phòng | `MatchManager`, `RoomRuntime`, `RoomEndpoints` | Host tạo/bắt đầu/kết thúc, vào/rời/ghép nhanh, 5/10/20/25/50 người, reconnect 30 giây, 64 phòng/process |
+| Runtime | `MatchRuntime`, `PlayerMovementSystem`, `DamageService` | Tick 30 Hz, server giữ tọa độ/HP/va chạm, input sequence/ACK, respawn chỉ ở Development |
+| Map | `data/map.json`, `MapData` | 4000 × 3000, nhà chặn xe và đạn, bụi che xe, cây/đèn trang trí; client/server dùng chung JSON |
+| Tầm nhìn | `MatchRuntime.VisibleSnapshots` | AOI 850 unit, ẩn bụi sau 145, radar toàn map, đèn pha phát hiện trong nón 570 unit khi không bị nhà chắn |
+| Vũ khí | `data/weapons.json`, `WeaponRules` | Chín súng: đạn thường, laser, tên lửa, pháo, bùn, liên thanh, bắn tỉa, lựu đạn, xung điện; chỉ số/thuộc tính trong HUD, ammo/reload, projectile/hitscan, splash, kill feed |
+| Loot và túi đồ | `data/items.json`, `data/loot_tables.json`, `LootSystem` | 16 spawn, ba item, stack/starting count, pickup chỉ cất vào túi, dùng do server áp, giữ qua reconnect |
+| Bo | `data/game_rules.json`, `ZoneSystem`, `ZoneDamageSystem` | Bo ban đầu phủ cả map, năm phase, nhịp 8–19 phút theo phòng, trừ HP liên tục bên ngoài |
+| Kết quả | `MatchLifecycle`, `EfMatchResultStore` | Winner/placement, event kết thúc, ghi transaction PostgreSQL và chống cộng trùng |
 
-Client gửi input 14 byte ở tick cố định 30 Hz; server kiểm tra sequence, clientTick và giới hạn trục, tự tính gia tốc 1000 unit/s², phanh 1400 unit/s², tốc độ tối đa 280 unit/s, xoay 10 rad/s, va nhà và biên map. Match xử lý tối đa 1024 command/tick, gửi snapshot riêng cho từng người khoảng 10 Hz qua outbound worker, chỉ giữ bản snapshot mới nhất. Log mỗi 30 giây ghi thời gian tick trung bình/cao nhất và số command/input bị bỏ; client đo trễ ACK và độ sửa vị trí. Không chờ DB hoặc network trong tick. Đạn thường, tên lửa, pháo và bùn được server tạo/di chuyển/va chạm; laser là hitscan. Server tính damage, nổ lan, HP, chết và hồi sinh sau 3 giây. Xe trong vũng bùn giảm tốc xuống 126 unit/s. Lệnh Fire nhận 5 byte gồm loại đạn và tầm bắn, không tin tọa độ/damage do client gửi.
-
-| Vũ khí | Tầm tối đa | Cooldown | Hiệu ứng |
-|---|---:|---:|---|
-| Đạn xa | 1800 | 7 tick | 25 HP, bay 1100 unit/s |
-| Laser | 2800 | 12 tick | 25 HP, tia tức thời bị nhà chắn |
-| Tên lửa | 2200 | 30 tick | Nổ 40 HP trong bán kính 110 |
-| Pháo | 1350 | 45 tick | Rơi sau 45 tick, nổ 45 HP trong bán kính 145 |
-| Bùn | 1200 | 20 tick | Vũng tồn tại 120 tick, làm chậm 55% |
-
-Snapshot v5 dài `15 + 14 × số xe + 8 × số projectile + 7 × số vũng` byte; header có ACK cho người nhận, mỗi xe có vận tốc. Event laser 15 byte và impact 12 byte. Radar bật 6 giây, hồi 30 giây; server lọc xe trong bụi và vật thể xa theo người xem. Redis có trong Compose nhưng runtime chưa dùng. `Game.Domain` vẫn là khung. Chưa có ammo/reload, item nhặt, bo, nhiều match song song, room browser hoặc cơ chế scale tới 50 người/trận.
+`MatchManager` tách queue command, snapshot và worker phát event/lưu DB, không gọi DB trong tick. SignalR MessagePack chở record room/item/zone; movement, shot, impact dùng binary v6. Client gửi yêu cầu, server xác thực room từ binding connection và JWT.
 
 ## Client
 
-React/Vite/Phaser có auth, lái thử offline và vào development match online. Map Graphics 3200×2200 có nhà, đường, bụi; camera, minimap, radar phóng to, HUD HP/trạng thái, điều khiển chuột/bàn phím hoặc hai cần ảo và nút bắn trên điện thoại. Giao diện trong trận ưu tiên điện thoại: khung game dùng chiều cao còn lại của viewport, thanh đầu trang/HUD/minimap/đạn thu gọn; màn hình ngang chuyển thanh đạn sang trái để không che xe. Thanh vũ khí chọn năm loại bằng nút hoặc phím 1–5; pháo có thanh chọn tầm. Client render projectile từ snapshot, cung bay pháo, laser, vụ nổ và vũng bùn. `Movement.ts` mô phỏng cùng quy tắc va nhà/gia tốc với server; `Prediction.ts` dự đoán self mỗi tick, loại input đã ACK và replay phần chờ; `Interpolation.ts` trễ ba tick để làm mượt xe khác, xoá ngay xe bị ẩn/rời trận. Sai lệch nhỏ được làm mượt, chết/hồi sinh hoặc sai lệch lớn áp ngay. Online vẫn lấy HP và vị trí cuối cùng từ server. Offline dùng cùng luật movement nhưng combat chỉ là hiệu ứng xem thử.
+React/Vite xử lý xác thực, sảnh, HUD và bảng kết quả; Phaser xử lý map, xe, đạn, ánh sáng, item và bo. `GameNetworkAdapter` nối SignalR với scene; `GameEventBus` quản lý listener; `Prediction`/`Movement` xử lý lái mượt với ACK; `Interpolation` làm mượt xe khác. Giao diện có nút/font Kenney UI Pack 2.0 CC0 (xem [ASSETS.md](ASSETS.md)).
 
-## Kiểm thử đã thực hiện
+Map có thêm khu đông/nam, đường và nhà chi tiết; xe render nhỏ hơn và camera điện thoại rộng hơn. Minimap có sương mù đã khám phá, vùng ngoài bo, item và địch được nhìn thấy. Chu kỳ sáng/tối, chế độ ngày/đêm, đèn pha và radar đều có nút; đèn pha còn gửi trạng thái cho server. Túi đồ online hiện ba ô chạm được, số lượng, phím Q/T/G; E nhặt vật phẩm gần. Chế độ offline khám phá/tập bắn vẫn hoạt động.
 
-| Lệnh | Kết quả |
+Map tĩnh được bake thành texture một lần khi scene khởi tạo; độ phân giải tự giảm theo giới hạn texture GPU. Nhãn xe không vẽ lại chữ khi nội dung giữ nguyên. Đồng hồ nội suy xe khác tiến một chiều qua các snapshot; xe mình làm mượt sai lệch nhỏ sau ACK. Edge headless mô phỏng điện thoại 390×844/hai người online đo p50/p95 frame khoảng 16,7/16,8 ms sau sửa, so với 50/66,7 ms khi map vector được vẽ lại mỗi frame. FPS máy thật cần đo riêng.
+
+Browser test còn ép GPU giả lập giới hạn texture 2048 để kiểm tra map nửa độ phân giải, và bắt exception JavaScript. Phaser được cấu hình `noAudio` vì bản hiện tại chưa phát âm thanh; việc này tránh lỗi `AudioContext` đã đóng khi scene bị tháo và trang reload.
+
+## Kiểm chứng đã chạy
+
+| Lệnh | Kết quả/giới hạn |
 |---|---|
-| `dotnet build Game.sln --no-restore` | Build backend |
-| `cd client; npm run build` | TypeScript và Vite build |
-| `cd client; npm run format:check` | Kiểm tra format |
-| `cd client; npm run test:realtime` | Hai client, binary snapshot/laser, HP/death/respawn, stealth/radar, input sai, reconnect |
-| `cd client; npm run test:movement` | Gia tốc, va nhà, replay input, sửa vị trí và nội suy/ẩn xe |
-| `cd client; npm run test:movement:server` | Server giới hạn tốc độ, va nhà, bác sequence/clientTick sai và ACK theo người |
-| `cd client; npm run test:weapons` | Đường đạn, nổ lan, pháo, bùn làm chậm/hết hạn, impact binary |
-| `cd client; npm run test:browser` | Hai tab Edge, lái qua WebSocket với trễ giả lập 80 ms và bố cục chạm portrait/landscape |
-| `cd client; npm run test:layout` | Preview offline ở 320×568, 390×844, 844×390 và PC 1366×768; kiểm tra không tràn viewport, thanh đạn/slider và nút chạm không chồng nhau |
+| `dotnet build --no-restore` | Thành công, 0 warning/error |
+| `dotnet run --no-restore --project tests/Game.RoomProbe/Game.RoomProbe.csproj` | Qua room, combat, loot, bo, 50 spawn, winner |
+| `cd client; npm run build` | TypeScript/Vite thành công; cảnh báo bundle Phaser lớn hiện có |
+| `cd client; npm run test:loot` | Qua hai client nhặt tranh chấp, dùng cứu thương/radar |
+| `cd client; npm run test:rooms` | Qua hai phòng cách ly, host, reconnect, quick join |
+| `cd client; npm run test:match` | Qua bo, winner, DB và quyền participant |
+| `cd client; npm run test:movement` | Qua prediction/collision/interpolation |
+| `cd client; npm run test:layout` | Qua viewport 320×568, 390×844, 844×390, 1366×768 trên Edge headless |
 
-Kiểm thử browser dùng Edge giả lập kích thước/chạm, chưa thay thế test trên Safari iOS hoặc thiết bị Android thật. Các bài test realtime dùng PostgreSQL tạm cổng 55432 trên máy phát triển. Chưa có load test 50 người/trận hoặc 10.000 người đồng thời.
+Các integration test có đăng ký tài khoản phải chạy lần lượt vì auth rate limit 10 request/phút/IP; nếu 429 thì chờ cửa sổ rate limit. Layout test là mô phỏng viewport, chưa phải kiểm thử nhiệt/FPS trên máy thật.
+
+## Giới hạn và việc còn mở
+
+Phòng/túi đồ giữa trận và queue kết quả ở memory của một API process; crash có thể mất trận hoặc kết quả chưa ghi. Chưa có Redis room routing, multi server ownership, outbox, leaderboard/cosmetic, đo tải 50 kết nối lâu dài hoặc 10.000 online. Chưa có chuẩn production cho tải lớn; xem [ARCHITECTURE.md](ARCHITECTURE.md) và [PHASES.md](PHASES.md). Runtime 50 người đã có sức chứa và spawn hợp lệ, không đồng nghĩa với 50 người ổn định trên mạng/thiết bị thật.

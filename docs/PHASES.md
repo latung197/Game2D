@@ -1,6 +1,6 @@
 # Lộ trình phát triển Phase 1–10
 
-**Ngày cập nhật:** 2026-10-09. **Trạng thái thực tế:** Phase 1–2 và bản thử Phase 3 đã triển khai; các phase tiếp theo là kế hoạch. Chi tiết code và giới hạn hiện tại ở [IMPLEMENTED.md](IMPLEMENTED.md).
+**Ngày cập nhật:** 2026-10-11. **Trạng thái thực tế:** Phase 1–7 đã triển khai; map lớn, phòng 5–50, bo theo sức chứa và túi đồ ba loại đã được bổ sung sau Phase 7. Các mô tả trạng thái từng phase bên dưới là lịch sử và có thể dùng số liệu cũ. Cấu hình hiện hành ở [GAMEPLAY.md](GAMEPLAY.md), code/giới hạn ở [IMPLEMENTED.md](IMPLEMENTED.md).
 
 Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room tối đa 10 người, 100 HP, Pistol, Health Kit, một safe zone, create/join room, damage/death/winner. Chỉ sau mốc này mới mở rộng troll item, interest management và cosmetics. Mỗi phase cần cập nhật tài liệu, chỉ rõ file tạo/sửa, lệnh chạy, test và kết quả quan sát được.
 
@@ -47,14 +47,14 @@ Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room t�
 
 **Hoàn tất khi:** hai client thấy vị trí của nhau qua server, mỗi runtime có state riêng, Hub không chứa luật gameplay. Chấp nhận movement còn hơi giật; Phase 3 xử lý độ mượt.
 
-## Phase 3 — movement authoritative và hình ảnh mượt — ĐÃ TRIỂN KHAI BẢN THỬ
+## Phase 3 — movement authoritative và hình ảnh mượt — ĐÃ LÀM
 
 **Việc triển khai:**
 
 1. Chuyển movement sang `PlayerMovementSystem` với acceleration, max speed, rotation, collision và clamp map; không nhận position từ client.
 2. Input có sequence/clientTick; server gửi self state, serverTick và last processed sequence.
 3. Client local prediction + pending input replay; remote interpolation buffer theo serverTick. Smooth correction nhỏ, áp ngay teleport/spawn/death.
-4. Tách dữ liệu map collision dùng chung về mặt **quy tắc** giữa client/server; server vẫn là nguồn sự thật khi hai implementation sai lệch.
+4. Dùng chung dữ liệu map collision trong `data/map.json` ở client và server; server vẫn là nguồn sự thật khi hai implementation sai lệch.
 5. Thêm phép đo input delay/correction, dropped sequence và tick duration.
 
 **File dự kiến:** `Game.Server/Players/PlayerMovementSystem.cs`, `Physics/CollisionSystem.cs`, `GameLoop/FixedGameLoop.cs`, `client/src/game/network/Prediction.ts`, `Reconciliation.ts`, `Interpolation.ts`, cập nhật scene/contract.
@@ -63,9 +63,9 @@ Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room t�
 
 **Hoàn tất khi:** server quyết định movement cuối cùng và cả local/remote có thể chơi được dưới độ trễ mục tiêu.
 
-**Trạng thái 2026-10-09:** đã có `PlayerMovementSystem` tăng tốc/phanh/xoay/va nhà tại 30 Hz; protocol v5 có `clientTick`, ACK riêng từng người và vận tốc; client dự đoán/replay, sửa sai và nội suy xe khác. Test server va nhà/sequence, test client replay/interpolation và hai tab Edge với trễ giả lập 80 ms đã qua. Chưa đo trễ trên thiết bị thật hoặc đường mạng thật; runtime vẫn một match tối đa 10 người.
+**Kết quả 2026-10-11:** `PlayerMovementSystem` tăng tốc/phanh/xoay/va nhà tại 30 Hz; protocol v5 có `clientTick`, ACK riêng từng người và vận tốc; client dự đoán/replay, sửa sai và nội suy xe khác. Test server xác nhận tốc độ, va nhà, input cũ/sai và ACK; test đối chiếu 237 tick C#–TypeScript lệch tối đa 0,003 đơn vị. Hai tab Edge qua bài test chuyển động local/remote ở 50, 80 và 100 ms độ trễ giả lập; test realtime xác nhận reconnect. Chưa đo trên thiết bị hoặc mạng thật.
 
-## Phase 4 — room và nhiều match cô lập — CHƯA LÀM
+## Phase 4 — room và nhiều match cô lập — ĐÃ LÀM
 
 **Việc triển khai:** REST create/list/join/leave/quick join; host start; room states `Waiting/Starting/Playing/Ending/Finished`; `RoomId`, code, map, count, host; `MatchManager` tạo/dừng nhiều runtime; nhóm SignalR theo match; reconnect/spectator theo policy. Cap vertical slice là **10 người**, nhưng dữ liệu và protocol dùng type có thể tăng lên 50. Redis room directory/presence có thể được thêm ở phase này hoặc khi có nhiều game server; runtime state vẫn in-memory.
 
@@ -75,7 +75,9 @@ Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room t�
 
 **Hoàn tất khi:** ít nhất hai match độc lập chạy trong cùng process. Quy tắc late join `AlivePlayers > 10` chưa thể áp dụng với cap 10; bật sau khi tăng cap và thêm spawn an toàn/protection.
 
-## Phase 5 — Pistol, projectile, damage và death — CHƯA LÀM
+**Kết quả 2026-10-11:** có REST tạo/liệt kê/vào/rời/ghép nhanh, host bắt đầu và kết thúc thủ công; mỗi phòng có `MatchRuntime` riêng, SignalR group và binding room cho từng kết nối. Phòng thường chặn vào muộn, phòng ghép nhanh cho vào khi chưa đủ 10 người. Reconnect giữ chỗ 30 giây và khôi phục vị trí/HP/cooldown; host rời thì chuyển quyền; phòng trống và phòng đã kết thúc được dọn. Test hai phòng song song xác nhận không lẫn movement, snapshot và shot; test trình duyệt xác nhận tạo/vào/bắt đầu. Spectator bị từ chối theo policy hiện tại. State phòng nằm trong memory một process, chưa có Redis/persistence hoặc tải nhiều process. Xem [ROOMS.md](ROOMS.md).
+
+## Phase 5 – Pistol, projectile, damage và death – ĐÃ LÀM
 
 **Việc triển khai:** nạp `weapons.json`; `WeaponDefinition` + behavior registry; Pistol với fire rate, ammo, reload; server spawn/move/despawn projectile và collision; `DamageService` pipeline; HP tối đa 100; kill attribution, drop state và spectator. Client chỉ gửi `fire`/aim, render projectile/HUD/event.
 
@@ -85,7 +87,9 @@ Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room t�
 
 **Hoàn tất khi:** hai người có thể bắn nhau bằng Pistol và thấy death/kill event nhất quán.
 
-## Phase 6 — loot và Health Kit — CHƯA LÀM
+**Kết quả 2026-10-11:** `data/weapons.json` cấu hình năm vũ khí, dung lượng băng, đạn dự trữ, tốc độ bắn và thời gian nạp. Server trừ đạn khi nhận phát bắn hợp lệ, tự bắt đầu nạp khi bóp cò với băng rỗng, chặn bắn trong lúc nạp/chết, chuyển đúng số viên từ dự trữ sau thời gian nạp. `DamageService` xử lý HP và trạng thái chết; server ghi số hạ/gục và phát `Kill` tới đúng phòng. `AmmoChanged` chỉ tới người sở hữu. HUD có đạn, nút/phím R, kill feed; lúc chết camera theo người chơi còn sống trong tầm nhìn đến khi hồi sinh. Probe mô phỏng xác nhận cooldown, mỗi viên trừ máu một lần, hạ gục một lần, chặn hành động khi chết, nạp đạn, hồi sinh và đạn hết tầm. Kiểm thử SignalR hai tài khoản xác nhận sự kiện đạn/nạp/hạ gục và các loại đạn cũ. Chưa có nhặt vật phẩm hoặc rơi đồ; đó là Phase 6.
+
+## Phase 6 — loot và Health Kit — ĐÃ LÀM
 
 **Việc triển khai:** `ItemDefinition` + `IGameItemBehavior` registry; map loot spawn points; world item state; Health Kit server heal đến tối đa 100; pickup distance/availability/inventory validation; cooldown/despawn/respawn policy; event pickup và HUD. Thiết kế loot table để sau này thêm weapon/ammo/trap.
 
@@ -95,15 +99,17 @@ Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room t�
 
 **Hoàn tất khi:** Health Kit xuất hiện trên map và được server xác nhận khi nhặt.
 
-## Phase 7 — safe zone, match lifecycle và winner — CHƯA LÀM
+**Kết quả hiện tại:** `data/items.json` định nghĩa cứu thương (+40 HP), pin radar và hộp đạn, tầm nhặt 80, số tối đa và số cấp đầu trận. `data/loot_tables.json` có 16 điểm. `LootSystem` xác nhận nhặt và revision; `MatchRuntime` giữ túi đồ, áp hiệu ứng khi gọi `UseItem`, giữ số lượng qua reconnect. Client vẽ ba loại item và có túi đồ chạm được, phím E/Q/T/G. Probe và test SignalR kiểm tra tranh nhặt, stack, dùng item và hồi sinh loot. Xem [GAMEPLAY.md](GAMEPLAY.md).
+
+## Phase 7 — safe zone, match lifecycle và winner — ĐÃ LÀM
 
 **Việc triển khai:** `game_rules.json` chứa phase duration/damage; `SafeZoneSystem` chọn vòng đích nằm trong vòng trước, warning/shrink/stable, damage theo dt; match start/end, winner/placement; persist `match_history`, `match_players`, `player_statistics` một lần ngoài tick; result screen và quay lobby.
 
-**File dự kiến:** `Game.Server/Zones/*`, `Matches/MatchLifecycle*`, `Game.Infrastructure/Persistence` entity/migration/repository, `client/src/game/effects/Zone*`, `client/src/ui/result/*`.
+**File đã có:** `data/game_rules.json`, `Game.Server/Zones/*`, `Matches/MatchLifecycle.cs`, `Game.Infrastructure/Persistence/EfMatchResultStore.cs` và migration `202610110001_MatchResults`, `client/src/game/render/ZoneRenderer.ts`, `client/src/ui/MatchResultScreen.tsx`. Chi tiết luật và schema: [MATCHES.md](MATCHES.md).
 
 **Test bắt buộc:** zone không tăng bán kính/ra ngoài map, damage đúng 1/2/4/7/12 HP/s theo config, warning đến trước shrink, winner chỉ chốt một lần, DB lưu kết quả một lần khi retry, match A lỗi không hỏng match B.
 
-**Hoàn tất khi:** vertical slice 10 người chạy đầu-cuối: tạo/join → spawn → loot/bắn → bo thu → chết → winner → result. Chạy thử nhiều client thật và ghi lại tick/snapshot metrics.
+**Kết quả 2026-10-11:** phòng online có vòng bo 5 giai đoạn Warning/Shrinking/Stable, sát thương 1/2/4/7/12 HP/s, người chết không hồi sinh, tự chốt winner/placement hoặc host kết thúc thủ công. Server phát `ZoneState` và `MatchEnded`; PostgreSQL lưu lịch sử và cộng thống kê ngoài tick bằng transaction có kiểm tra ghi trùng. API kết quả chỉ cho người tham gia đọc. Client vẽ vòng hiện tại/đích trên map và minimap, cảnh báo ngoài bo, hiển thị bảng kết quả và quay sảnh. Probe C# qua luật bo/kết quả; test hai client và DB qua `npm run test:match`; probe DB `npm run test:match:store` xác nhận retry không cộng thống kê hai lần. Migration đã áp dụng trên DB phát triển. Chưa có thử đủ 10 người thật đồng thời, đo tải dài hạn, hay outbox bền vững nếu process chết trước khi lưu.
 
 ## Phase 8 — troll item và super item — CHƯA LÀM
 
@@ -123,11 +129,13 @@ Mốc quan trọng là **vertical slice sau Phase 7**: một map, một room t�
 
 **Test bắt buộc:** entity vào/ra AOI không nhấp nháy hoặc mất hit event, người ở xa không nhận state không cần thiết, 10 người ổn định; tăng dần đến 50 với bot/load client và theo dõi tick dưới ngân sách 33,33 ms cùng packet size. Không nâng max player chỉ vì một lần build thành công.
 
-**Hoàn tất khi:** số người tối đa được chốt theo dữ liệu đo, không theo giả định. Khi dùng nhiều server, room routing qua Redis/server registry nhưng movement vẫn tới owner server.
+**Hoàn tất khi:** sức chứa 50 đã được đo qua 50 kết nối thật và tải nhiều phòng kéo dài; hiện mới có cap/điểm spawn/luật bo và probe server. Khi dùng nhiều server, room routing qua Redis/server registry nhưng movement vẫn tới owner server.
 
 ## Phase 10 — identity, logo, cosmetics và số liệu — CHƯA LÀM
 
 **Việc triển khai:** bảng profile/cosmetic/ownership/statistics/achievement/leaderboard bằng migration; logo chọn từ bộ có sẵn, unlock hoặc mua bằng currency game; hiển thị trên xe, tên, kill feed, leaderboard, profile và result; vehicle skin/banner/title/emote/effect theo cùng catalog. Server validate ownership và reward. Không mở upload logo tùy ý ở MVP.
+
+**Phần đã có từ Phase 7:** bảng `player_statistics` cộng tổng trận/thắng/kill/death khi lưu kết quả. Chưa có endpoint hồ sơ, bảng xếp hạng, cosmetic hoặc reward.
 
 **File dự kiến:** `Game.Application/Profiles/*`, `Leaderboard/*`, `Game.Infrastructure/Persistence` entity/migration, `Game.Api/Endpoints/*`, `client/src/ui/{profile,inventory,leaderboard}/*`, Phaser cosmetic renderer.
 

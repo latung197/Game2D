@@ -1,0 +1,13 @@
+{
+  "initialCenterX": 2000,
+  "initialCenterY": 1500,
+  "initialRadius": 2500,
+  "tickRate": 30,
+  "phases": [
+    { "warningTicks": 1800, "shrinkTicks": 1200, "stableTicks": 600, "targetRadius": 1420, "damagePerSecond": 1 },
+    { "warningTicks": 1200, "shrinkTicks": 1500, "stableTicks": 900, "targetRadius": 900, "damagePerSecond": 2 },
+    { "warningTicks": 900, "shrinkTicks": 1800, "stableTicks": 900, "targetRadius": 500, "damagePerSecond": 4 },
+    { "warningTicks": 900, "shrinkTicks": 1800, "stableTicks": 900, "targetRadius": 220, "damagePerSecond": 7 },
+    { "warningTicks": 600, "shrinkTicks": 2100, "stableTicks": 900, "targetRadius": 40, "damagePerSecond": 12 }
+  ]
+}

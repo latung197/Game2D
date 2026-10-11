@@ -62,13 +62,13 @@ try {
       payloadLengths.push(payload.byteLength);
     });
     connection.on('Shot', (payload) => {
-      assert.equal(payload.byteLength, 15);
+      assert.equal(payload.byteLength, 16);
       const shot = decodeShot(payload);
       if (shot) shots[i].push(shot);
     });
     await connection.start();
-    const joined = await connection.invoke('JoinMatch');
-    assert.equal(Number(field(joined, 'ProtocolVersion', 'protocolVersion', 0)), 5);
+    const joined = await connection.invoke('JoinMatch', 'development');
+    assert.equal(Number(field(joined, 'ProtocolVersion', 'protocolVersion', 0)), 6);
     if (i === 1) {
       const roster = rosterOf(joined);
       playerIds = accounts.map((account) => {
@@ -183,14 +183,14 @@ try {
     .build();
   await reconnected.start();
   connections.push(reconnected);
-  await reconnected.invoke('JoinMatch');
+  await reconnected.invoke('JoinMatch', 'development');
   const afterReconnectRadar = decodeRadar(await reconnected.invoke('UseRadar'));
   assert.ok(afterReconnectRadar.cooldownTicks < radar.cooldownTicks);
   await waitFor(() => snapshots[1]?.players.length === 2);
   await reconnected.stop();
   await waitFor(() => snapshots[1]?.players.length === 1);
   console.log(
-    `PASS: v5 binary ${SNAPSHOT_HEADER_BYTES + PLAYER_BYTES * 2}-byte snapshots, 15-byte laser shots, damage/death/respawn, server stealth/radar, reconnect; ${(1000 / averageMs).toFixed(1)} snapshots/s`,
+    `PASS: v6 binary ${SNAPSHOT_HEADER_BYTES + PLAYER_BYTES * 2}-byte snapshots, 16-byte laser shots, damage/death/respawn, server stealth/radar, reconnect; ${(1000 / averageMs).toFixed(1)} snapshots/s`,
   );
 } finally {
   await Promise.all(connections.map((connection) => connection.stop()));
