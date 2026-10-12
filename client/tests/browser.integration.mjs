@@ -163,6 +163,20 @@ try {
   assert.equal(inventoryLayout.slots.length, 3);
   assert.ok(inventoryLayout.inventory.bottom < inventoryLayout.weapons.top,
     JSON.stringify(inventoryLayout));
+  await pages[0].eval('document.querySelector("[aria-label=\\"Xem thuộc tính vật phẩm\\"]").click()');
+  const itemDetails = await pages[0].eval(`(() => {
+    const panel = document.querySelector('.item-info-panel');
+    const r = panel.getBoundingClientRect();
+    return {count:panel.querySelectorAll('.item-detail').length, text:panel.textContent,
+      left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight};
+  })()`);
+  assert.equal(itemDetails.count, 3);
+  assert.ok(itemDetails.text.includes('Hồi 40 HP') && itemDetails.text.includes('Quét 6 giây') &&
+    itemDetails.text.includes('một băng'), JSON.stringify(itemDetails));
+  assert.ok(itemDetails.left >= 0 && itemDetails.right <= itemDetails.width &&
+    itemDetails.top >= 0 && itemDetails.bottom <= itemDetails.height, JSON.stringify(itemDetails));
+  await pages[0].screenshot('../.runtime-test/items-mobile.png');
+  await pages[0].eval('document.querySelector("[aria-label=\\"Đóng thông tin vật phẩm\\"]").click()');
   const measureFrames = () => pages[0].eval(`new Promise(resolve => {
     const gaps = []; let previous = 0; const started = performance.now();
     const frame = now => {

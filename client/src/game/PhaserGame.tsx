@@ -9,12 +9,7 @@ import type { MatchResult } from '../services/realtime/RealtimeClient';
 import { GameNetworkAdapter } from './network/GameNetworkAdapter';
 import { WeaponKind } from './network/BinaryGameCodec';
 import { WEAPONS, weaponFor } from './config/weapons';
-
-const ITEMS = [
-  { kind: 1, name: 'Túi cứu thương', short: 'HỒI MÁU', icon: '✚', key: 'Q', count: 'healthKits' },
-  { kind: 2, name: 'Pin radar', short: 'QUÉT ĐỊCH', icon: '◉', key: 'T', count: 'radarCells' },
-  { kind: 3, name: 'Hộp đạn', short: 'TIẾP ĐẠN', icon: '▣', key: 'G', count: 'ammoCrates' },
-] as const;
+import { ITEMS, itemFor } from './config/items';
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
   connected: 'Đã vào trận thử online.',
@@ -87,7 +82,7 @@ function MiniMap({ hud, radar }: { hud: HudState; radar: boolean }): React.JSX.E
             strokeWidth="10"
           />
           <text textAnchor="middle" dominantBaseline="middle" fontSize="34" fill="#174755">
-            {ITEMS.find((entry) => entry.kind === item.kind)?.icon}
+            {itemFor(item.kind)?.icon}
           </text>
         </g>
       ))}
@@ -195,6 +190,10 @@ export function PhaserGame({
   const mount = useRef<HTMLDivElement>(null);
   const lightingCanvas = useRef<HTMLCanvasElement>(null);
   const weaponList = useRef<HTMLDivElement>(null);
+  const stickPointers = useRef<{ move: number | null; aim: number | null }>({
+    move: null,
+    aim: null,
+  });
   const adapterRef = useRef<GameNetworkAdapter | null>(null);
   const onMatchEndRef = useRef(onMatchEnd);
   onMatchEndRef.current = onMatchEnd;
@@ -216,6 +215,7 @@ export function PhaserGame({
   const [headlights, setHeadlights] = useState(true);
   const [weapon, setWeapon] = useState<WeaponKind>(WeaponKind.Bullet);
   const [weaponInfoOpen, setWeaponInfoOpen] = useState(false);
+  const [itemInfoOpen, setItemInfoOpen] = useState(false);
   const [artilleryRange, setArtilleryRange] = useState(900);
   const [status, setStatus] = useState('Đang kết nối...');
   const [hud, setHud] = useState<HudState>(emptyHud);
@@ -273,8 +273,14 @@ export function PhaserGame({
         setRadarUntil(time + result.radar.activeTicks * (1000 / 30));
         setRadarReady(time + result.radar.cooldownTicks * (1000 / 30));
       }
+      setInventory(result.inventory);
+      setAmmo((current) => {
+        const next = { ...current };
+        for (const state of result.ammo) next[state.weapon] = { ...state, receivedAt: Date.now() };
+        return next;
+      });
       setLootNotice({
-        text: `${ITEMS.find((item) => item.kind === kind)?.name} đã dùng.`,
+        text: `${itemFor(kind)?.name ?? 'Vật phẩm'} đã dùng.`,
         until: Date.now() + 2400,
       });
     } catch {
@@ -289,7 +295,12 @@ export function PhaserGame({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement) return;
+      if (event.key === 'Escape') {
+        setWeaponInfoOpen(false);
+        setItemInfoOpen(false);
+        return;
+      }
+      if (event.target instanceof HTMLInputElement || weaponInfoOpen || itemInfoOpen) return;
       if (event.key.toLowerCase() === 'n') {
         const next =
           controls.current.lightingMode === 'cycle'
@@ -309,7 +320,7 @@ export function PhaserGame({
       }
       const itemKey = ITEMS.find((item) => item.key.toLowerCase() === event.key.toLowerCase());
       if (itemKey) {
-        void useInventoryItem(itemKey.kind);
+        void useInventoryItem(itemKey.id);
         return;
       }
       if (event.key.toLowerCase() === 'r') {
@@ -328,7 +339,7 @@ export function PhaserGame({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [weaponInfoOpen, itemInfoOpen]);
 
   useEffect(() => {
     if (!mount.current) return;
@@ -351,7 +362,7 @@ export function PhaserGame({
     const unsubscribePickup = adapter?.events.on('pickup', (pickup) => {
       if (pickup.playerId === session?.playerId)
         setLootNotice({
-          text: `Đã nhặt ${ITEMS.find((item) => item.kind === pickup.kind)?.name ?? 'vật phẩm'} vào túi`,
+          text: `Đã nhặt ${itemFor(pickup.kind)?.name ?? 'vật phẩm'} vào túi`,
           until: Date.now() + 2800,
         });
     });
@@ -422,15 +433,34 @@ export function PhaserGame({
 
   function moveStick(event: PointerEvent<HTMLDivElement>, aim: boolean): void {
     const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
     const x = (event.clientX - rect.left - rect.width / 2) / (rect.width * 0.38);
     const y = (event.clientY - rect.top - rect.height / 2) / (rect.height * 0.38);
-    const length = Math.max(1, Math.hypot(x, y));
+    const distance = Math.hypot(x, y);
+    const length = Math.max(1, distance);
     if (aim) {
-      if (Math.hypot(x, y) > 0.12) controls.current.aimAngle = Math.atan2(y, x);
+      if (distance > 0.12) controls.current.aimAngle = Math.atan2(y, x);
       controls.current.touchAim = true;
     } else {
-      controls.current.moveX = x / length;
-      controls.current.moveY = y / length;
+      // A press on the center means drive forward; dragging picks a direction.
+      controls.current.moveX = distance <= 0.12 ? Math.cos(controls.current.aimAngle) : x / length;
+      controls.current.moveY = distance <= 0.12 ? Math.sin(controls.current.aimAngle) : y / length;
+    }
+    const knobX = aim ? x / length : controls.current.moveX;
+    const knobY = aim ? y / length : controls.current.moveY;
+    event.currentTarget.style.setProperty('--stick-x', `${Math.round(knobX * 21)}px`);
+    event.currentTarget.style.setProperty('--stick-y', `${Math.round(knobY * 21)}px`);
+  }
+
+  function finishStick(event: PointerEvent<HTMLDivElement>, aim: boolean): void {
+    const key = aim ? 'aim' : 'move';
+    if (stickPointers.current[key] !== event.pointerId) return;
+    stickPointers.current[key] = null;
+    event.currentTarget.style.setProperty('--stick-x', '0px');
+    event.currentTarget.style.setProperty('--stick-y', '0px');
+    if (!aim) {
+      controls.current.moveX = 0;
+      controls.current.moveY = 0;
     }
   }
 
@@ -438,30 +468,39 @@ export function PhaserGame({
     return (
       <div
         className={`touch-stick ${aim ? 'aim-stick' : 'move-stick'}`}
-        aria-label={aim ? 'Kéo để ngắm' : 'Kéo để di chuyển'}
+        aria-label={aim ? 'Kéo để ngắm' : 'Giữ để tiến, kéo để đổi hướng'}
         onPointerDown={(e) => {
-          e.currentTarget.setPointerCapture(e.pointerId);
+          const key = aim ? 'aim' : 'move';
+          if (stickPointers.current[key] !== null) return;
+          stickPointers.current[key] = e.pointerId;
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            // A touch ending during capture can still be released by pointerup/cancel.
+          }
           moveStick(e, aim);
         }}
         onPointerMove={(e) => {
-          if (e.currentTarget.hasPointerCapture(e.pointerId)) moveStick(e, aim);
+          if (stickPointers.current[aim ? 'aim' : 'move'] === e.pointerId) moveStick(e, aim);
         }}
         onPointerUp={(e) => {
-          e.currentTarget.releasePointerCapture(e.pointerId);
-          if (!aim) {
-            controls.current.moveX = 0;
-            controls.current.moveY = 0;
+          finishStick(e, aim);
+          if (
+            typeof e.currentTarget.hasPointerCapture === 'function' &&
+            e.currentTarget.hasPointerCapture(e.pointerId)
+          ) {
+            try {
+              e.currentTarget.releasePointerCapture(e.pointerId);
+            } catch {
+              // Pointer cancel may have released capture already.
+            }
           }
         }}
-        onPointerCancel={() => {
-          if (!aim) {
-            controls.current.moveX = 0;
-            controls.current.moveY = 0;
-          }
-        }}
+        onPointerCancel={(e) => finishStick(e, aim)}
+        onLostPointerCapture={(e) => finishStick(e, aim)}
       >
         <span className="stick-knob">{aim ? '◎' : '✦'}</span>
-        <small>{aim ? 'NGẮM' : 'LÁI'}</small>
+        <small>{aim ? 'NGẮM' : 'LÁI · GIỮ'}</small>
       </div>
     );
   }
@@ -514,27 +553,35 @@ export function PhaserGame({
             controls.current.pickup = true;
           }}
         >
-          ✚ NHẶT{' '}
-          {ITEMS.find((item) => item.kind === hud.nearbyItem?.kind)?.name.toUpperCase() ??
-            'VẬT PHẨM'}{' '}
-          · E
+          ✚ NHẶT {itemFor(hud.nearbyItem?.kind ?? 0)?.name.toUpperCase() ?? 'VẬT PHẨM'} · E
         </button>
       )}
       {session && (
         <div className="inventory-dock" aria-label="Túi vật phẩm">
           <div className="inventory-heading">
             <span>TÚI ĐỒ</span>
-            <small>NHẶT E · DÙNG Q/T/G</small>
+            <button
+              type="button"
+              aria-label="Xem thuộc tính vật phẩm"
+              aria-expanded={itemInfoOpen}
+              onClick={() => {
+                setWeaponInfoOpen(false);
+                setItemInfoOpen((open) => !open);
+              }}
+            >
+              CHI TIẾT ⓘ
+            </button>
           </div>
           <div className="inventory-slots">
             {ITEMS.map((item) => (
               <button
-                key={item.kind}
+                key={item.id}
                 type="button"
-                className="inventory-slot"
+                className={`inventory-slot tone-${item.tone}`}
                 disabled={hud.health === 0 || inventory[item.count] === 0}
-                onClick={() => void useInventoryItem(item.kind)}
-                aria-label={`Dùng ${item.name}`}
+                onClick={() => void useInventoryItem(item.id)}
+                aria-label={`Dùng ${item.name}, còn ${inventory[item.count]}`}
+                title={`${item.name}: ${item.description}`}
               >
                 <kbd>{item.key}</kbd>
                 <strong>{item.icon}</strong>
@@ -559,96 +606,68 @@ export function PhaserGame({
           ))}
         </div>
       )}
-      <div className={`weapon-dock ${weaponInfoOpen ? 'info-open' : ''}`} aria-label="Chọn vũ khí">
+      <div className="weapon-dock" aria-label="Chọn vũ khí">
         <div className="weapon-title">
-          VŨ KHÍ <span>1–9 ĐỂ ĐỔI</span>
+          <span>VŨ KHÍ</span> <small>1–9 ĐỂ ĐỔI · VUỐT ĐỂ XEM THÊM</small>
         </div>
         <div ref={weaponList} className="weapon-list">
           {WEAPONS.map((item) => (
             <button
               key={item.kind}
               type="button"
-              className={`weapon-option ${weapon === item.kind ? 'selected' : ''}`}
+              className={`weapon-option tone-weapon-${item.kind} ${weapon === item.kind ? 'selected' : ''}`}
               aria-label={item.name}
               aria-pressed={weapon === item.kind}
+              title={`${item.name} · ${item.damage} HP/phát · ${item.special}`}
               onClick={() => {
                 controls.current.weapon = item.kind;
                 setWeapon(item.kind);
-                setWeaponInfoOpen(false);
               }}
             >
+              <span className="weapon-index">{item.kind}</span>
               <strong>{item.icon}</strong>
               <small>{item.short}</small>
+              {session && <em>{ammo[item.kind]?.loaded ?? '–'}</em>}
             </button>
           ))}
         </div>
         <div className="weapon-summary">
-          <strong>{selectedWeapon.name}</strong>
-          <span>
-            {selectedWeapon.damage} DMG · TẦM {selectedWeapon.range} · {selectedWeapon.magazine}{' '}
-            VIÊN
-          </span>
+          <div>
+            <strong>{selectedWeapon.name}</strong>
+            <span>{selectedWeapon.special}</span>
+          </div>
+          <b>{selectedWeapon.damage === 0 ? 'HỖ TRỢ' : `${selectedWeapon.damage} DMG`}</b>
           <button
             type="button"
             aria-label="Xem thuộc tính vũ khí"
             aria-expanded={weaponInfoOpen}
-            onClick={() => setWeaponInfoOpen((open) => !open)}
+            onClick={() => {
+              setItemInfoOpen(false);
+              setWeaponInfoOpen((open) => !open);
+            }}
           >
-            i
+            CHI TIẾT ⓘ
           </button>
         </div>
-        {weaponInfoOpen && (
-          <div
-            className="weapon-info-panel"
-            role="dialog"
-            aria-label={`Thông tin ${selectedWeapon.name}`}
-          >
-            <button
-              type="button"
-              className="weapon-info-close"
-              aria-label="Đóng thông tin vũ khí"
-              onClick={() => setWeaponInfoOpen(false)}
-            >
-              ×
-            </button>
-            <h3>
-              {selectedWeapon.icon} {selectedWeapon.name}
-            </h3>
-            <p>{selectedWeapon.description}</p>
-            <dl>
-              <div>
-                <dt>Sát thương</dt>
-                <dd>{selectedWeapon.damage} HP/phát</dd>
-              </div>
-              <div>
-                <dt>Nhịp bắn</dt>
-                <dd>{(30 / selectedWeapon.cooldownTicks).toFixed(1)} phát/giây</dd>
-              </div>
-              <div>
-                <dt>Tầm bắn</dt>
-                <dd>{selectedWeapon.range} unit</dd>
-              </div>
-              <div>
-                <dt>Đạn</dt>
-                <dd>
-                  {selectedWeapon.magazine} / {selectedWeapon.reserve}
-                </dd>
-              </div>
-              <div>
-                <dt>Nạp đạn</dt>
-                <dd>{(selectedWeapon.reloadTicks / 30).toFixed(1)} giây</dd>
-              </div>
-            </dl>
-            <small>{selectedWeapon.special}</small>
-          </div>
-        )}
         {session && (
           <div className="ammo-panel" aria-live="polite">
-            <span>
-              {ammo[weapon]?.reloadTicks
-                ? `ĐANG NẠP · ${Math.max(0, Math.ceil(((ammo[weapon]!.reloadTicks * 1000) / 30 - (now - ammo[weapon]!.receivedAt)) / 1000))}s`
-                : `${ammo[weapon]?.loaded ?? '–'} / ${ammo[weapon]?.reserve ?? '–'}`}
+            <span className="ammo-count">
+              <strong>{ammo[weapon]?.loaded ?? '–'}</strong>
+              <small>/ {ammo[weapon]?.reserve ?? '–'} DỰ TRỮ</small>
             </span>
+            {Boolean(ammo[weapon]?.reloadTicks) && (
+              <span className="reload-status">
+                ĐANG NẠP ·{' '}
+                {Math.max(
+                  0,
+                  Math.ceil(
+                    ((ammo[weapon]!.reloadTicks * 1000) / 30 - (now - ammo[weapon]!.receivedAt)) /
+                      1000,
+                  ),
+                )}
+                s
+              </span>
+            )}
             <button
               type="button"
               onClick={() => adapterRef.current?.reload(weapon)}
@@ -673,10 +692,165 @@ export function PhaserGame({
                 setArtilleryRange(value);
               }}
             />
-            <span>{artilleryRange}m</span>
+            <span>{artilleryRange} u</span>
           </label>
         )}
       </div>
+      {weaponInfoOpen && (
+        <div className="loadout-backdrop" onClick={() => setWeaponInfoOpen(false)}>
+          <section
+            className="weapon-info-panel loadout-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Thông tin ${selectedWeapon.name}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="loadout-heading">
+              <div>
+                <small>KHO VŨ KHÍ · 09 LOẠI</small>
+                <h2>Chọn cách chiến đấu</h2>
+              </div>
+              <button
+                className="loadout-close"
+                type="button"
+                aria-label="Đóng thông tin vũ khí"
+                onClick={() => setWeaponInfoOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="loadout-weapon-grid" aria-label="Danh sách vũ khí">
+              {WEAPONS.map((item) => (
+                <button
+                  key={item.kind}
+                  type="button"
+                  className={item.kind === weapon ? 'active' : ''}
+                  aria-pressed={item.kind === weapon}
+                  onClick={() => {
+                    controls.current.weapon = item.kind;
+                    setWeapon(item.kind);
+                  }}
+                >
+                  <span>{item.icon}</span>
+                  <b>{item.name}</b>
+                </button>
+              ))}
+            </div>
+            <div className="loadout-hero">
+              <span className="loadout-emblem">{selectedWeapon.icon}</span>
+              <div>
+                <small>
+                  {selectedWeapon.behavior === 'Hitscan'
+                    ? 'TIA TỨC THỜI'
+                    : selectedWeapon.behavior === 'Lob'
+                      ? 'ĐẠN CẦU VỒNG'
+                      : selectedWeapon.behavior === 'Hazard'
+                        ? 'KHỐNG CHẾ'
+                        : 'ĐẠN BAY'}
+                </small>
+                <h3>{selectedWeapon.name}</h3>
+                <p>{selectedWeapon.description}</p>
+              </div>
+            </div>
+            <div className="loadout-stats">
+              <div>
+                <small>SÁT THƯƠNG</small>
+                <strong>{selectedWeapon.damage} HP/phát</strong>
+              </div>
+              <div>
+                <small>NHỊP BẮN</small>
+                <strong>{(30 / selectedWeapon.cooldownTicks).toFixed(1)} phát/giây</strong>
+              </div>
+              <div>
+                <small>TẦM HIỆU LỰC</small>
+                <strong>{selectedWeapon.range} unit</strong>
+              </div>
+              <div>
+                <small>BĂNG ĐẠN</small>
+                <strong>{selectedWeapon.magazine} viên</strong>
+              </div>
+              <div>
+                <small>ĐẠN DỰ TRỮ {session ? 'HIỆN CÓ' : 'BAN ĐẦU'}</small>
+                <strong>
+                  {session ? (ammo[weapon]?.reserve ?? '–') : selectedWeapon.reserve} viên
+                </strong>
+              </div>
+              <div>
+                <small>THỜI GIAN NẠP</small>
+                <strong>{(selectedWeapon.reloadTicks / 30).toFixed(1)} giây</strong>
+              </div>
+              {selectedWeapon.blastRadius > 0 && (
+                <div>
+                  <small>VÙNG ẢNH HƯỞNG</small>
+                  <strong>{selectedWeapon.blastRadius} unit</strong>
+                </div>
+              )}
+              {selectedWeapon.speed > 0 && (
+                <div>
+                  <small>TỐC ĐỘ ĐẠN</small>
+                  <strong>{selectedWeapon.speed} unit/giây</strong>
+                </div>
+              )}
+            </div>
+            <p className="loadout-note">
+              ✦ {selectedWeapon.special}. Số đạn đang có hiển thị trên thanh súng; sát thương và
+              hiệu ứng do server xử lý.
+            </p>
+          </section>
+        </div>
+      )}
+      {itemInfoOpen && session && (
+        <div className="loadout-backdrop" onClick={() => setItemInfoOpen(false)}>
+          <section
+            className="item-info-panel loadout-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Thông tin vật phẩm"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="loadout-heading">
+              <div>
+                <small>TÚI ĐỒ · NHẶT BẰNG E</small>
+                <h2>Vật phẩm mang theo</h2>
+              </div>
+              <button
+                className="loadout-close"
+                type="button"
+                aria-label="Đóng thông tin vật phẩm"
+                onClick={() => setItemInfoOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="item-detail-list">
+              {ITEMS.map((item) => (
+                <article key={item.id} className={`item-detail tone-${item.tone}`}>
+                  <span className="item-detail-icon">{item.icon}</span>
+                  <div>
+                    <h3>{item.name}</h3>
+                    <p>{item.description}</p>
+                    <small>
+                      {item.kind === 'HealthKit'
+                        ? `Hồi ${item.heal} HP`
+                        : item.kind === 'RadarCell'
+                          ? 'Quét 6 giây'
+                          : 'Nạp kho đạn mọi súng'}{' '}
+                      · Tối đa {item.maxStack} trong túi
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={hud.health === 0 || inventory[item.count] === 0}
+                    onClick={() => void useInventoryItem(item.id)}
+                  >
+                    DÙNG {item.key} <b>×{inventory[item.count]}</b>
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
       <div className="minimap-panel">
         <div className="minimap-heading">
           <span>BẢN ĐỒ KHU VỰC</span>
@@ -776,7 +950,11 @@ export function PhaserGame({
             type="button"
             aria-label="Bắn"
             onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId);
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                // The fire state still resets on pointerup/cancel.
+              }
               controls.current.fire = true;
             }}
             onPointerUp={() => {

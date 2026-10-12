@@ -15,8 +15,11 @@ async function inspect(width, height, mobile, screenshotName) {
   });
   let nextId = 0;
   const pending = new Map();
+  const errors = [];
   socket.onmessage = ({ data }) => {
     const message = JSON.parse(data);
+    if (message.method === 'Runtime.exceptionThrown')
+      errors.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
     const entry = pending.get(message.id);
     if (!entry) return;
     pending.delete(message.id);
@@ -76,11 +79,41 @@ async function inspect(width, height, mobile, screenshotName) {
     } else {
       assert.equal(b.touchDisplay, 'none');
     }
+    await evaluate("document.querySelector('[aria-label=\"Xem thuộc tính vũ khí\"]').click()");
+    const detail = await evaluate(`(() => {
+      const panel = document.querySelector('.weapon-info-panel');
+      const r = panel.getBoundingClientRect();
+      return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,
+        count:panel.querySelectorAll('.loadout-weapon-grid button').length};
+    })()`);
+    assert.equal(detail.count, 9);
+    assert.ok(detail.left >= 0 && detail.right <= width && detail.top >= 0 &&
+      detail.bottom <= height, JSON.stringify(detail));
+    if (screenshotName === 'layout-390.png') {
+      await mkdir('../.runtime-test', { recursive: true });
+      const shot = await send('Page.captureScreenshot', { format: 'png' });
+      await writeFile('../.runtime-test/loadout-mobile.png', Buffer.from(shot.data, 'base64'));
+    }
+    await evaluate("document.querySelector('[aria-label=\"Đóng thông tin vũ khí\"]').click()");
     if (screenshotName) {
       await mkdir('../.runtime-test', { recursive: true });
       const screenshot = await send('Page.captureScreenshot', { format: 'png' });
       await writeFile(`../.runtime-test/${screenshotName}`, Buffer.from(screenshot.data, 'base64'));
     }
+    if (screenshotName === 'layout-390.png') {
+      const before = await evaluate("Number(document.querySelector('.minimap-svg circle:last-child').getAttribute('cx'))");
+      const center = await evaluate(`(() => {
+        const r = document.querySelector('.move-stick').getBoundingClientRect();
+        return {x:r.left+r.width/2,y:r.top+r.height/2};
+      })()`);
+      await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...center, id: 1 }] });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const after = await evaluate("Number(document.querySelector('.minimap-svg circle:last-child').getAttribute('cx'))");
+      assert.ok(after > before + 10, `center press did not move the car: ${before} -> ${after}`);
+    }
+    assert.deepEqual(errors, []);
     console.log(`PASS: ${width}×${height} ${mobile ? 'mobile' : 'desktop'} UI fits viewport`);
   } finally {
     socket.close();

@@ -18,7 +18,7 @@ npm run dev
 
 Vào `http://127.0.0.1:5173/`. Khám phá và tập bắn chạy offline. Để chơi online, đăng ký/đăng nhập, tạo phòng với sức chứa mong muốn hoặc ghép nhanh; host bắt đầu trận.
 
-**Điều khiển:** WASD/mũi tên lái, chuột ngắm và click bắn, `1–9` đổi súng, `R` nạp, `E` nhặt, `Q` dùng cứu thương, `T` dùng pin radar, `G` dùng hộp đạn, `N` đổi ngày/đêm, `L` bật/tắt đèn pha. Điện thoại có cần lái/ngắm, nút bắn, thanh súng vuốt được và các ô túi đồ chạm được. Nút `i` cạnh thanh súng mở bảng sát thương và thuộc tính; xem [bảng 9 vũ khí](docs/GAMEPLAY.md#vũ-khí-và-xe).
+**Điều khiển:** WASD/mũi tên lái, chuột ngắm và click bắn, `1–9` đổi súng, `R` nạp, `E` nhặt, `Q` dùng cứu thương, `T` dùng pin radar, `G` dùng hộp đạn, `N` đổi ngày/đêm, `L` bật/tắt đèn pha. Trên điện thoại, giữ giữa nút **Lái** để xe chạy tới, kéo cần để đổi hướng; cần **Ngắm** và nút **Bắn** hoạt động đồng thời. Thanh súng vuốt được và các ô túi đồ chạm được. **Chi tiết ⓘ** trên thanh súng hoặc túi đồ mở bảng thuộc tính, tác dụng và số lượng hiện có; xem [bảng 9 vũ khí](docs/GAMEPLAY.md#vũ-khí-và-xe).
 
 ## Tài liệu
 

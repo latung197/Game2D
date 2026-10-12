@@ -1,6 +1,6 @@
 # Bàn giao Scrap Street
 
-Cập nhật 2026-10-11. Code hiện có hai chế độ offline, phòng online 5/10/20/25/50, map 4000×3000, chín súng với bảng chỉ số, bụi ẩn nấp, đèn pha phát hiện mục tiêu, radar, túi đồ ba loại, bo năm phase, bảng kết quả và PostgreSQL. Xe mới vào phòng được đặt xa nhau hơn; nổ của bản thân không trừ máu. Chi tiết chức năng ở [IMPLEMENTED.md](IMPLEMENTED.md) và luật ở [GAMEPLAY.md](GAMEPLAY.md).
+Cập nhật 2026-10-12. Code hiện có hai chế độ offline, phòng online 5/10/20/25/50, map 4000×3000, chín súng với bảng so sánh chỉ số, HUD đạn thực có, ba item với bảng tác dụng và giới hạn, bụi ẩn nấp, đèn pha phát hiện mục tiêu, radar, bo năm phase, bảng kết quả và PostgreSQL. Xe mới vào phòng được đặt xa nhau hơn; nổ của bản thân không trừ máu. Giao diện súng/item dùng dữ liệu ở `data/weapons.json` và `data/items.json`. Chi tiết chức năng ở [IMPLEMENTED.md](IMPLEMENTED.md) và luật ở [GAMEPLAY.md](GAMEPLAY.md).
 
 ## Chạy từ checkout
 

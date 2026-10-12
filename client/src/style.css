@@ -1216,6 +1216,8 @@ button {
     color: #263b47;
     font-size: 25px;
     border: 2px solid #fff0d2;
+    transform: translate(var(--stick-x, 0px), var(--stick-y, 0px));
+    transition: transform 70ms ease-out;
   }
   .touch-stick small {
     position: absolute;
@@ -2078,5 +2080,518 @@ button {
     left: 282px;
     bottom: 14px;
     width: 182px;
+  }
+}
+
+/* Combat HUD: the selected weapon and actual ammunition remain readable while driving. */
+.weapon-dock,
+.inventory-dock,
+.health-panel {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.weapon-dock {
+  width: min(486px, calc(100% - 28px));
+  padding: 10px;
+  border-color: #d2ac72a6;
+  border-radius: 14px;
+  background: linear-gradient(155deg, #28414bea, #10242ff2 72%);
+  box-shadow:
+    0 12px 34px #061a2499,
+    inset 0 1px #ffffff21;
+}
+.weapon-title {
+  align-items: center;
+  color: #ffe2a7;
+}
+.weapon-title small {
+  color: #c4d4cf;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.weapon-list {
+  scrollbar-color: #e7b76e #203744;
+  scrollbar-width: thin;
+  padding: 2px 1px 6px;
+}
+.weapon-option {
+  position: relative;
+  flex-basis: 82px;
+  min-height: 62px;
+  padding: 8px 5px 5px;
+  border-color: #607c7e;
+  background: linear-gradient(150deg, #3a5660, #213842);
+  box-shadow: inset 0 1px #ffffff1d;
+  transition:
+    background 0.15s,
+    transform 0.15s,
+    border-color 0.15s;
+}
+.weapon-option:hover {
+  transform: translateY(-2px);
+  border-color: #e7c489;
+}
+.weapon-option.selected {
+  background: linear-gradient(145deg, #ffe0a2, #eeb76b);
+  box-shadow:
+    0 0 0 1px #fff1cc,
+    0 4px 15px #efb36655;
+}
+.weapon-option strong {
+  font-size: 23px;
+}
+.weapon-option small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.weapon-index,
+.weapon-option em {
+  position: absolute;
+  top: 4px;
+  color: #bed1ca;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+.weapon-index {
+  left: 5px;
+}
+.weapon-option em {
+  right: 5px;
+}
+.weapon-option.selected .weapon-index,
+.weapon-option.selected em {
+  color: #4e4437;
+}
+.weapon-summary {
+  gap: 9px;
+  margin-top: 8px;
+  white-space: normal;
+}
+.weapon-summary > div {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+.weapon-summary strong {
+  font-size: 13px;
+  line-height: 1.1;
+}
+.weapon-summary span {
+  font-size: 10px;
+}
+.weapon-summary b {
+  flex: 0 0 auto;
+  color: #172d35;
+  background: #f4ca85;
+  padding: 5px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+.weapon-summary button,
+.inventory-heading button {
+  width: auto;
+  height: auto;
+  padding: 6px 8px;
+  border: 1px solid #cda66c;
+  border-radius: 6px;
+  background: #314a50;
+  color: #ffe2ad;
+  font-size: 9px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.weapon-summary button:hover,
+.inventory-heading button:hover {
+  background: #49645f;
+}
+.ammo-panel {
+  margin-top: 7px;
+  padding: 6px 8px;
+  background: #0a202ad9;
+}
+.ammo-count {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.ammo-count strong {
+  color: #fff0c9;
+  font-size: 24px;
+  line-height: 1;
+}
+.ammo-count small {
+  color: #a8c9c3;
+  font-size: 9px;
+}
+.reload-status {
+  color: #ffbb75;
+  font-size: 10px;
+  font-weight: 900;
+}
+.inventory-heading {
+  padding-bottom: 7px;
+  color: #d5ede4;
+}
+.inventory-heading button {
+  padding: 4px 6px;
+  font-size: 8px;
+}
+.inventory-slot {
+  overflow: hidden;
+}
+.inventory-slot::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--item-accent, #b8dcb9);
+}
+.inventory-slot.tone-health {
+  --item-accent: #b8e99c;
+}
+.inventory-slot.tone-radar {
+  --item-accent: #8ed9f2;
+}
+.inventory-slot.tone-ammo {
+  --item-accent: #f6c789;
+}
+.inventory-slot strong {
+  color: var(--item-accent);
+}
+.inventory-slot:disabled {
+  opacity: 0.63;
+}
+.health-panel {
+  border-color: #add4b2a3;
+}
+.health-track i {
+  background: linear-gradient(90deg, #75c585, #b3e8a2);
+}
+
+.loadout-backdrop {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: #07161ecc;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.loadout-dialog,
+.weapon-info-panel.loadout-dialog {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  width: min(700px, 100%);
+  max-height: min(670px, 100%);
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid #dab87c;
+  border-radius: 17px;
+  background:
+    radial-gradient(circle at 90% 0%, #42635b, transparent 34%),
+    linear-gradient(145deg, #253e48, #10252f 78%);
+  box-shadow:
+    0 20px 60px #030d12cc,
+    inset 0 1px #ffffff32;
+  color: #f7eee0;
+}
+.loadout-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.loadout-heading small,
+.loadout-hero small {
+  color: #e5c389;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+.loadout-heading h2 {
+  margin: 3px 0 0;
+  font-size: clamp(19px, 3vw, 28px);
+}
+.loadout-close {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #a7c0b7;
+  border-radius: 8px;
+  background: #2a434b;
+  color: #fff2d9;
+  font-size: 22px;
+  cursor: pointer;
+}
+.loadout-weapon-grid {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 5px;
+  margin-bottom: 15px;
+}
+.loadout-weapon-grid button {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 57px;
+  padding: 5px 2px;
+  border: 1px solid #6b8b88;
+  border-radius: 7px;
+  background: #344f55;
+  color: #e8eee5;
+  cursor: pointer;
+}
+.loadout-weapon-grid button.active {
+  border-color: #fff0c9;
+  background: #e8b56d;
+  color: #203a43;
+}
+.loadout-weapon-grid button span {
+  font-size: 19px;
+  line-height: 1;
+}
+.loadout-weapon-grid button b {
+  max-width: 100%;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.loadout-hero {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 14px;
+  border: 1px solid #d9be8955;
+  border-radius: 10px;
+  background: #112832cc;
+}
+.loadout-emblem {
+  display: grid;
+  place-items: center;
+  flex: 0 0 68px;
+  width: 68px;
+  height: 68px;
+  border: 1px solid #e8c78b;
+  border-radius: 10px;
+  background: #304a4d;
+  color: #ffe1a3;
+  font-size: 38px;
+}
+.loadout-hero h3 {
+  margin: 2px 0;
+  color: #fff2d6;
+  font-size: 21px;
+}
+.loadout-hero p {
+  margin: 0;
+  color: #cfddd4;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.loadout-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+.loadout-stats > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #76928b66;
+  border-radius: 8px;
+  background: #1b333bd9;
+}
+.loadout-stats small {
+  color: #a8c4b8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+.loadout-stats strong {
+  color: #ffdfa7;
+  font-size: 13px;
+}
+.loadout-note {
+  margin: 12px 0 0;
+  color: #bdd9c8;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.item-detail-list {
+  display: grid;
+  gap: 9px;
+}
+.item-detail {
+  display: grid;
+  grid-template-columns: 47px 1fr auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid #698b88;
+  border-radius: 10px;
+  background: #18313a;
+}
+.item-detail-icon {
+  display: grid;
+  place-items: center;
+  width: 47px;
+  height: 47px;
+  border-radius: 9px;
+  background: #35535a;
+  color: var(--item-accent);
+  font-size: 26px;
+}
+.item-detail.tone-health {
+  --item-accent: #b8e99c;
+}
+.item-detail.tone-radar {
+  --item-accent: #8ed9f2;
+}
+.item-detail.tone-ammo {
+  --item-accent: #f6c789;
+}
+.item-detail h3 {
+  margin: 0 0 3px;
+  font-size: 15px;
+}
+.item-detail p {
+  margin: 0 0 4px;
+  color: #d0e0d7;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.item-detail small {
+  color: var(--item-accent);
+  font-size: 10px;
+  font-weight: 800;
+}
+.item-detail button {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--item-accent);
+  border-radius: 7px;
+  background: #294750;
+  color: #fff0d0;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.item-detail button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (max-width: 700px), (pointer: coarse) {
+  .weapon-dock {
+    bottom: 137px;
+    width: min(306px, calc(100% - 12px));
+    padding: 6px;
+  }
+  .weapon-option {
+    flex-basis: 62px;
+    min-height: 54px;
+  }
+  .weapon-option strong {
+    font-size: 19px;
+  }
+  .weapon-option small {
+    font-size: 7px;
+  }
+  .weapon-summary {
+    gap: 4px;
+    margin-top: 3px;
+  }
+  .weapon-summary strong {
+    font-size: 10px;
+  }
+  .weapon-summary span {
+    font-size: 8px;
+  }
+  .weapon-summary b {
+    padding: 4px;
+    font-size: 8px;
+  }
+  .weapon-summary button {
+    padding: 4px;
+    font-size: 8px;
+  }
+  .ammo-panel {
+    margin-top: 5px;
+    padding: 4px 6px;
+  }
+  .ammo-count strong {
+    font-size: 19px;
+  }
+  .ammo-count small {
+    font-size: 8px;
+  }
+  .ammo-panel button {
+    font-size: 9px;
+    padding: 4px;
+  }
+  .inventory-dock {
+    bottom: 330px;
+  }
+  .inventory-heading button {
+    font-size: 7px;
+  }
+  .inventory-slot span {
+    font-size: 6px;
+  }
+  .loadout-dialog,
+  .weapon-info-panel.loadout-dialog {
+    padding: 12px;
+  }
+  .loadout-weapon-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .loadout-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .item-detail {
+    grid-template-columns: 38px 1fr;
+    gap: 8px;
+    padding: 9px;
+  }
+  .item-detail-icon {
+    width: 38px;
+    height: 38px;
+    font-size: 21px;
+  }
+  .item-detail button {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .weapon-dock {
+    top: 98px;
+    bottom: auto;
+    left: 6px;
+    width: min(258px, calc(50% - 20px));
+  }
+  .inventory-dock {
+    left: 282px;
+    bottom: 14px;
+  }
+  .loadout-dialog,
+  .weapon-info-panel.loadout-dialog {
+    max-height: 100%;
   }
 }

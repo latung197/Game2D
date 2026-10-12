@@ -1,8 +1,12 @@
 # Gameplay, map và túi đồ
 
+Tài liệu này mô tả trạng thái hiện tại của Scrap Street. Mọi phòng online dùng server .NET làm nguồn sự thật; chế độ khám phá và tập bắn offline chạy trong trình duyệt. Gameplay và giao diện cùng đọc `data/map.json`; server nhúng cùng dữ liệu khi build.
+
 ## Vũ khí và xe
 
-Trong trận, chọn súng bằng phím `1`–`9` hoặc vuốt/chạm thanh súng trên điện thoại. Nút `i` cạnh súng đang chọn mở mô tả, sát thương, nhịp bắn, tầm bắn, băng đạn, đạn dự trữ và thời gian nạp. `R` nạp đạn. Mọi chỉ số dưới đây lấy từ `data/weapons.json`; server quyết định sát thương và đạn thực tế. 30 tick bằng một giây.
+Trong trận, chọn súng bằng phím `1`–`9` hoặc vuốt/chạm thanh súng trên điện thoại. Nút **Chi tiết ⓘ** mở kho vũ khí để so sánh 9 loại: mô tả, sát thương, nhịp bắn, tầm bắn, cỡ băng, đạn dự trữ, tốc độ đạn hoặc vùng ảnh hưởng và thời gian nạp. Thanh súng hiển thị **số viên đang có trong băng**; cụm đạn bên dưới hiển thị **đạn dự trữ hiện có**, không phải mức tối đa. `R` nạp đạn. Mọi chỉ số dưới đây lấy từ `data/weapons.json`; server quyết định sát thương và đạn thực tế. 30 tick bằng một giây.
+
+Trên điện thoại, **giữ giữa cần Lái để đi tới**, kéo ngón tay trên cần để đổi hướng; nhả tay hoặc bị ngắt chạm thì dừng lệnh lái. Cần Ngắm điều chỉnh hướng bắn riêng và có thể dùng cùng nút Bắn.
 
 | Phím | Vũ khí | Sát thương/trúng | Nhịp bắn | Tầm | Băng/dự trữ | Nạp | Đặc tính |
 |---:|---|---:|---:|---:|---:|---:|---|
@@ -17,8 +21,6 @@ Trong trận, chọn súng bằng phím `1`–`9` hoặc vuốt/chạm thanh sú
 | 9 | Xung điện | 15 HP | 5 tick | 700 | 15/75 | 45 tick | Tia tức thời, tầm gần |
 
 Mỗi người bắt đầu với 100 HP. Xe trong phòng online không tự mất máu khi đứng yên: sát thương đến từ người chơi khác hoặc bo sau khi thu; bo ban đầu phủ toàn bản đồ. Vị trí xuất hiện của người chơi được giãn xa để tránh giao tranh ngay lúc vào; vụ nổ của chính người bắn không gây sát thương cho người đó. Phòng online loại xe khi HP về 0 và cho xem trận; phòng `development` hồi sinh để thử súng.
-
-Tài liệu này mô tả trạng thái hiện tại của Scrap Street. Mọi phòng online dùng server .NET làm nguồn sự thật; chế độ khám phá và tập bắn offline chạy trong trình duyệt. Gameplay và giao diện cùng đọc `data/map.json`; server nhúng cùng dữ liệu khi build.
 
 ## Bản đồ và hiển thị
 
@@ -66,7 +68,7 @@ Các giây ở bảng là cơ sở cho phòng 10 người. `ZoneSystem` nhân t�
 | Pin radar | 2 | T hoặc chạm ô | Hiện đối thủ toàn map trong 6 giây; cập nhật cooldown radar 30 giây | 40 giây |
 | Hộp đạn | 3 | G hoặc chạm ô | Thêm tối đa một băng cho mỗi vũ khí vào đạn dự trữ, không vượt giới hạn byte | 30 giây |
 
-`InventoryState` và `UseItemResult` đi riêng qua SignalR MessagePack; snapshot di chuyển binary v6 giữ nguyên. Túi đồ nằm trong `PlayerRuntime` và được giữ khi reconnect trong 30 giây. Số lượng và hiệu ứng do server quyết định. `PickupResult.Health`/`ItemPicked.NewHealth` là HP **tại thời điểm nhặt**, không còn mang nghĩa đã hồi máu. `UseItem` trả hiệu ứng đã áp, HP mới, radar và đạn; client không tự cộng máu/đạn. Người chết không nhặt/dùng đồ. Túi đồ hiện trong HUD online với số lượng và phím tắt.
+`InventoryState` và `UseItemResult` đi riêng qua SignalR MessagePack; snapshot di chuyển binary v6 giữ nguyên. Túi đồ nằm trong `PlayerRuntime` và được giữ khi reconnect trong 30 giây. Số lượng và hiệu ứng do server quyết định. `PickupResult.Health`/`ItemPicked.NewHealth` là HP **tại thời điểm nhặt**, không còn mang nghĩa đã hồi máu. `UseItem` trả hiệu ứng đã áp, HP mới, radar và đạn; client không tự cộng máu/đạn. Người chết không nhặt/dùng đồ. HUD online hiển thị số lượng và phím tắt; **Chi tiết ⓘ** trên túi mở mô tả và giới hạn của cả ba vật phẩm. Giao diện đọc số lượng cấp đầu trận, số tối đa và lượng hồi máu từ cùng `data/items.json` mà server dùng.
 
 ## Công nghệ realtime
 
